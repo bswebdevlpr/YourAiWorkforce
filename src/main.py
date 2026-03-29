@@ -1,29 +1,30 @@
-# Build workflow
-from langchain import messages
-from langgraph.graph import END, START, MessagesState, StateGraph
+from typing import Annotated, AsyncGenerator
 
-from edges import should_continue
-from model import llm_call
-from tools import tool_node
+from fastapi import Body, FastAPI
+from fastapi.responses import StreamingResponse
 
-agent_builder = StateGraph(MessagesState)
+from src.agent import graph
+from src.schemas import PostBody
 
-# Add nodes
-agent_builder.add_node("llm_call", llm_call)
-agent_builder.add_node("tool_node", tool_node)
+try:
+    app = FastAPI(title="YourAiWorkforce", version="0.0.1", docs_url="/docs")
+    agent = graph()
+except Exception as e:
+    # 적절한 에러처리 필요
+    print(e)
 
-# Add edges to connect nodes
-agent_builder.add_edge(START, "llm_call")
-agent_builder.add_conditional_edges("llm_call", should_continue, ["tool_node", END])
-agent_builder.add_edge("tool_node", "llm_call")
 
-# Compile the agent
-agent = agent_builder.compile()
+async def generate_chat_responses(message: str) -> AsyncGenerator[str, None]:
+    async for message_chunk, metadata in agent.astream(
+        {"messages": [("user", message)]}, stream_mode="messages"
+    ):
+        content = str(message_chunk.content or "").strip()
+        if content:
+            yield message_chunk.content
 
-# Invoke
-from langchain.messages import HumanMessage
 
-messgaes = [HumanMessage(content="Add 3 and 4.")]
-messgaes = agent.invoke({"messgaes": messgaes})
-for m in messages["messages"]:
-    m.pretty_print()
+@app.post("/")
+async def root(body: Annotated[PostBody, Body(description="유저의 질문 메시지")]):
+    return StreamingResponse(
+        generate_chat_responses(body.message), media_type="text/event-stream"
+    )
