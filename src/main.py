@@ -6,12 +6,8 @@ from fastapi.responses import StreamingResponse
 from src.agent import graph
 from src.schemas import PostBody
 
-try:
-    app = FastAPI(title="YourAiWorkforce", version="0.0.1", docs_url="/docs")
-    agent = graph()
-except Exception as e:
-    # 적절한 에러처리 필요
-    print(e)
+app = FastAPI(title="YourAiWorkforce", version="0.0.1", docs_url="/docs")
+agent = graph()
 
 
 async def generate_chat_responses(message: str) -> AsyncGenerator[str, None]:
