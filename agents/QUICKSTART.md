@@ -97,12 +97,12 @@ Domain Expert Generator로 작동해주세요.
 Phase 1 (Foundation)으로 진행:
 
 ```
-agent-system/agents/phase-1/04-data-engineer.md를 읽고
-Data Engineer로 작동해주세요.
+agent-system/agents/phase-1/04-backend-developer.md를 읽고
+Backend Developer로 작동해주세요.
 ```
 
 그 다음:
-- Backend Developer → DB 스키마 및 API
+- Data Engineer → 데이터 다운로드 및 로딩
 - DevOps Engineer → 빌드 시스템
 
 ---

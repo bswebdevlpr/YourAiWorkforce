@@ -409,10 +409,10 @@ data/raw/
 
 ## 🎬 다음 단계
 
-Data Engineer Phase 1 작업을 완료했다면, Backend Developer가 실제 데이터로 API를 테스트해야 합니다:
+Data Engineer Phase 1 작업을 완료했다면:
 
 ```
-"agent-system/agents/phase-1/05-backend-developer.md를 읽고 BDA로 작동해주세요"
+"agent-system/agents/phase-1/06-devops-engineer.md를 읽고 DOE로 작동해주세요"
 ```
 
 (참고: Backend Developer는 Phase 1에서 두 번 등장 - 먼저 스키마 작성, 나중에 데이터 검증)

@@ -472,7 +472,7 @@ export interface SearchResult {
 Frontend P0 UI를 완료했다면:
 
 ```
-"agent-system/agents/phase-2/07-backend-developer.md를 읽고 BDA로 작동해주세요"
+"agent-system/agents/phase-2/08-backend-developer.md를 읽고 BDA로 작동해주세요"
 ```
 
 Backend Developer가 P0 API를 완성하고 데이터 검증을 수행합니다.

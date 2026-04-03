@@ -447,7 +447,7 @@ import '@testing-library/jest-dom';
 이제 Phase 2 (Core Features)로 진행하세요:
 
 ```
-"agent-system/agents/phase-2/06-frontend-developer.md를 읽고 FDA로 작동해주세요"
+"agent-system/agents/phase-2/07-frontend-developer.md를 읽고 FDA로 작동해주세요"
 ```
 
 ---

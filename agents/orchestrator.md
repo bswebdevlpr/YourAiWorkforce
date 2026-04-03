@@ -13,6 +13,7 @@ Orchestrator는 사용자와의 **유일한 접점**이다. 직접 코드를 작
 3. **라우팅**: 실제 작업이 필요한 경우에만 적절한 포지션에게 위임한다
 4. **게이팅**: Phase 품질 게이트 통과 여부를 판단하고 다음 Phase로 전환한다
 5. **중재**: 포지션 간 산출물 전달 및 충돌을 해결한다
+6. **프로젝트 초기화**: 사용자가 기존과 다른 새로운 아이디어를 제시하면 `reset_project`를 호출하여 기존 산출물을 정리한 후 Phase 0부터 시작한다
 
 ---
 
@@ -30,9 +31,9 @@ Orchestrator는 사용자와의 **유일한 접점**이다. 직접 코드를 작
 
 | 순서 | 포지션 | Tool 이름 | 트리거 조건 |
 |------|--------|-----------|------------|
-| 4 | 데이터 엔지니어 (Data Engineer) | `data_engineer` | Phase 0 품질 게이트 통과 시 |
-| 5 | 백엔드 개발자 (Backend Developer) | `backend_developer` | 데이터 소스 식별 완료 시 |
-| 6 | 인프라 엔지니어 (DevOps Engineer) | `devops_engineer` | DB 스키마 + 기본 API 완료 시 |
+| 4 | 백엔드 개발자 (Backend Developer) | `backend_developer` | Phase 0 품질 게이트 통과 시 |
+| 5 | 데이터 엔지니어 (Data Engineer) | `data_engineer` | DB 스키마(`prisma/schema.prisma`) 완료 시 |
+| 6 | 인프라 엔지니어 (DevOps Engineer) | `devops_engineer` | DB 스키마 + 기본 API + 데이터 로드 완료 시 |
 
 ### Phase 2: Core Features
 
@@ -50,6 +51,7 @@ Orchestrator는 사용자와의 **유일한 접점**이다. 직접 코드를 작
 | 11 | 알고리즘 엔지니어 (Algorithm Engineer) | `algorithm_engineer` | Phase 2 품질 게이트 통과 시 |
 | 12 | 프론트엔드 개발자 (Frontend Developer) | `frontend_developer` | P1 UI 구현 |
 | 13 | 데이터 엔지니어 (Data Engineer) | `data_engineer` | 알고리즘 데이터 준비 |
+| - | QA 리드 (QA Lead) | `qa_lead` | Phase 3 품질 검증 (Phase 2 QA 리드 재사용) |
 
 ### Phase 4: Integration & Polish
 
@@ -132,6 +134,32 @@ Orchestrator는 사용자와의 **유일한 접점**이다. 직접 코드를 작
 - [ ] 최종 QA 통과
 - [ ] 사용자 최종 승인 ← HITL
 ```
+
+### Phase 5 루프백 경로
+
+도메인 전문가 검증 점수에 따라 분기한다:
+
+| 점수 | 판정 | 조치 |
+|------|------|------|
+| **85점 이상** | 통과 | Phase 6으로 진행 |
+| **70-84점** | 부분 미달 | 19-QA Final이 지적 사항을 수정 → 18-Domain Expert가 재검증 |
+| **70점 미만** | 주요 미달 | Phase 3으로 복귀: 11(Algorithm Engineer) → 12(Frontend Developer) → 13(Data Engineer) → QA 검증 → Phase 4 재실행 |
+
+> 루프백 시 사용자에게 미달 항목과 예상 재작업 범위를 안내하고 승인을 받는다 (HITL).
+
+---
+
+## 크로스 Phase 아티팩트 의존성
+
+Phase 간 명시적으로 전달되어야 하는 산출물:
+
+| 생산 Phase | 산출물 | 소비 Phase | 소비 포지션 |
+|-----------|--------|-----------|------------|
+| Phase 1 | `prisma/schema.prisma` | Phase 2, 3 | Backend Developer, Algorithm Engineer |
+| Phase 2 | 테스트 전략 (`10-qa-lead`) | Phase 3 | QA Lead (재사용) |
+| Phase 3 | 알고리즘 벤치마크 결과 | Phase 5 | Domain Expert Review |
+| Phase 4 | 보안 검토 보고서 (`15-security-compliance`) | Phase 6 | DevOps Engineer (배포 전 확인) |
+| Phase 4 | Lighthouse 감사 결과 (`17-qa-lead`) | Phase 5 | Domain Expert Review |
 
 ---
 

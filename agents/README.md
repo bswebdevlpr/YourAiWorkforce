@@ -53,8 +53,8 @@ Phase 0: Discovery & Planning (10%)
 └─ DEA Generator → Domain Expert 생성
          ↓
 Phase 1: Foundation (15%)
-├─ DEN → 데이터 파이프라인
 ├─ BDA → DB 스키마 + 기본 API
+├─ DEN → 데이터 파이프라인
 └─ DOE → 빌드 시스템 구성
          ↓
 Phase 2: Core Features (25%)
@@ -121,8 +121,8 @@ Phase 0:
 3. DEA Generator → docs/personas/[domain]-expert.md 생성
 
 Phase 1:
-4. DEN → 데이터 다운로드 및 로딩
-5. BDA → DB 스키마 및 API 구현
+4. BDA → DB 스키마 및 API 구현
+5. DEN → 데이터 다운로드 및 로딩
 6. DOE → 빌드 시스템 설정
 
 [Phase 2-6 계속...]
@@ -147,9 +147,9 @@ agent-system/
 │   │   ├── 02-system-architect.md
 │   │   └── 03-domain-expert-generator.md
 │   ├── phase-1/                # Foundation
-│   │   ├── 04-data-engineer.md
-│   │   ├── 05-backend-developer.md
-│   │   └── 09-devops-engineer.md
+│   │   ├── 04-backend-developer.md
+│   │   ├── 05-data-engineer.md
+│   │   └── 06-devops-engineer.md
 │   ├── phase-2/                # Core Features (TODO)
 │   ├── phase-3/                # Advanced Features (TODO)
 │   ├── phase-4/                # Integration & Polish (TODO)
@@ -300,13 +300,13 @@ agent-system/
 
 # 2. Phase 1: Foundation
 
-"agent-system/agents/phase-1/04-data-engineer.md를 읽고 DEN으로 작동해주세요."
-→ scripts/download-data.sh, scripts/migration/*.ts 생성
-
-"agent-system/agents/phase-1/05-backend-developer.md를 읽고 BDA로 작동해주세요."
+"agent-system/agents/phase-1/04-backend-developer.md를 읽고 BDA로 작동해주세요."
 → prisma/schema.prisma, src/app/api/* 생성
 
-"agent-system/agents/phase-1/09-devops-engineer.md를 읽고 DOE로 작동해주세요."
+"agent-system/agents/phase-1/05-data-engineer.md를 읽고 DEN으로 작동해주세요."
+→ scripts/download-data.sh, scripts/migration/*.ts 생성
+
+"agent-system/agents/phase-1/06-devops-engineer.md를 읽고 DOE로 작동해주세요."
 → next.config.ts, tsconfig.json, eslint, prettier 설정
 
 # 3. Phase 2-6 계속...

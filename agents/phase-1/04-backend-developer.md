@@ -408,7 +408,7 @@ DATABASE_URL="postgresql://user:password@localhost:5432/dbname"
 Backend Developer Phase 1 작업을 완료했다면:
 
 ```
-"agent-system/agents/phase-1/09-devops-engineer.md를 읽고 DOE로 작동해주세요"
+"agent-system/agents/phase-1/05-data-engineer.md를 읽고 DEN으로 작동해주세요"
 ```
 
 DevOps Engineer가 빌드 시스템과 환경 구성을 설정합니다.

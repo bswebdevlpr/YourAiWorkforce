@@ -461,7 +461,7 @@ export async function GET(request: NextRequest) {
 Backend P0 API를 완료했다면:
 
 ```
-"agent-system/agents/phase-2/08-data-engineer.md를 읽고 DEN으로 작동해주세요"
+"agent-system/agents/phase-2/09-data-engineer.md를 읽고 DEN으로 작동해주세요"
 ```
 
 Data Engineer가 데이터를 보강하고 품질을 개선합니다.
