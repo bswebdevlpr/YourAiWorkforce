@@ -1,5 +1,6 @@
 .venv/
 .langgraph_api/
 __pycache__/
+ai-workspace/
 
 .env*

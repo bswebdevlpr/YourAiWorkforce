@@ -6,9 +6,10 @@ from src.config import MODEL_NAME_DEFAULT
 from src.libs.model import create_chat_model
 from src.libs.persona import ORCHESTRATOR, load_persona
 from src.state import AgentState
-from src.subagents import SUBAGENT_REGISTRY, SUBAGENT_TOOLS
+from src.subagents import ALL_TOOLS, SUBAGENT_REGISTRY
+from src.tools import reset_project
 
-_model = create_chat_model(MODEL_NAME_DEFAULT).bind_tools(SUBAGENT_TOOLS)
+_model = create_chat_model(MODEL_NAME_DEFAULT).bind_tools(ALL_TOOLS)
 _system_prompt = load_persona(ORCHESTRATOR)
 
 
@@ -22,6 +23,8 @@ def route(state: AgentState):
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.tool_calls:
         name = last.tool_calls[0]["name"]
+        if name == "reset_project":
+            return "reset_project"
         if name in SUBAGENT_REGISTRY:
             return name
     return END
@@ -84,6 +87,7 @@ def graph():
     builder.add_node(
         "review", review, destinations=(*subgraph_names, "orchestrator")
     )
+    builder.add_node("reset_project", reset_project)
     for name, (subgraph, _, _) in SUBAGENT_REGISTRY.items():
         builder.add_node(name, subgraph)
 
@@ -91,8 +95,10 @@ def graph():
     builder.add_conditional_edges(
         "orchestrator",
         route,
-        {name: "bridge" for name in SUBAGENT_REGISTRY} | {END: END},
+        {name: "bridge" for name in SUBAGENT_REGISTRY}
+        | {"reset_project": "reset_project", END: END},
     )
+    builder.add_edge("reset_project", "orchestrator")
     for name in SUBAGENT_REGISTRY:
         builder.add_edge(name, "review")
     builder.add_edge("review", "orchestrator")
