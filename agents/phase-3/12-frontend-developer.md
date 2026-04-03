@@ -30,11 +30,11 @@ export const colors = {
   secondary: '#8B5CF6',    // Purple
   accent: '#F59E0B',       // Amber
 
-  // 도메인 특화 색상 (예: TriHanzi 국가별 색상)
+  // 도메인 특화 색상 (프로젝트에 맞게 정의)
   domain: {
-    korea: '#DC2626',      // Red
-    japan: '#1E3A8A',      // Navy
-    china: '#CA8A04',      // Gold
+    category1: '#DC2626',  // Red
+    category2: '#1E3A8A',  // Navy
+    category3: '#CA8A04',  // Gold
   },
 
   // 시맨틱 색상
@@ -242,35 +242,40 @@ export function Tabs({ tabs, defaultTab, className }: TabsProps) {
 
 ### Step 3: P1 기능 페이지 구현 (60-90분)
 
+**Phase 2 컴포넌트 마이그레이션**: Phase 2에서 작성된 인라인 스타일/하드코딩된 값을 디자인 시스템 토큰으로 교체한다:
+1. 색상 값 → `colors.primary`, `colors.domain.*` 토큰으로 교체
+2. 간격/크기 → Tailwind 유틸리티 클래스로 통일
+3. 마이그레이션 후 시각적 회귀가 없는지 확인한다
+
 PRD의 P1 기능을 구현하세요.
 
-**예시: 비교 페이지 (TriHanzi)**
+**예시: P1 기능 페이지**
 
 ```typescript
-// src/app/[locale]/compare/page.tsx
+// src/app/[locale]/[feature]/page.tsx
 
 import { Suspense } from 'react';
-import { CompareClient } from '@/components/compare/CompareClient';
+import { [Feature]Client } from '@/components/[feature]/[Feature]Client';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Compare Characters - TriHanzi',
-  description: 'Compare CJK characters across Korea, Japan, and China',
+  title: '[Feature] - [ProjectName]',
+  description: '[Feature description]',
 };
 
-export default function ComparePage() {
+export default function [Feature]Page() {
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="mb-8 text-4xl font-bold">Compare Characters</h1>
+      <h1 className="mb-8 text-4xl font-bold">[Feature Title]</h1>
 
-      <Suspense fallback={<ComparePageSkeleton />}>
-        <CompareClient />
+      <Suspense fallback={<PageSkeleton />}>
+        <[Feature]Client />
       </Suspense>
     </div>
   );
 }
 
-function ComparePageSkeleton() {
+function PageSkeleton() {
   return (
     <div className="space-y-4">
       <div className="h-12 w-full animate-pulse rounded-lg bg-gray-200 dark:bg-gray-800" />
@@ -283,56 +288,30 @@ function ComparePageSkeleton() {
 **클라이언트 컴포넌트**:
 
 ```typescript
-// src/components/compare/CompareClient.tsx
+// src/components/[feature]/[Feature]Client.tsx
 
 'use client';
 
 import { useState } from 'react';
-import { CompareSearch } from './CompareSearch';
-import { ComparisonTable } from './ComparisonTable';
-import { CompareExport } from './CompareExport';
 
-export function CompareClient() {
-  const [selectedCharacters, setSelectedCharacters] = useState<string[]>([]);
+export function [Feature]Client() {
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
-  const handleAddCharacter = (char: string) => {
-    if (!selectedCharacters.includes(char) && selectedCharacters.length < 5) {
-      setSelectedCharacters([...selectedCharacters, char]);
+  const handleAddItem = (item: string) => {
+    if (!selectedItems.includes(item) && selectedItems.length < 5) {
+      setSelectedItems([...selectedItems, item]);
     }
   };
 
-  const handleRemoveCharacter = (char: string) => {
-    setSelectedCharacters(selectedCharacters.filter((c) => c !== char));
+  const handleRemoveItem = (item: string) => {
+    setSelectedItems(selectedItems.filter((i) => i !== item));
   };
 
   return (
     <div className="space-y-8">
-      {/* Search */}
-      <CompareSearch
-        onSelect={handleAddCharacter}
-        disabled={selectedCharacters.length >= 5}
-      />
-
-      {/* Selected Characters */}
-      {selectedCharacters.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {selectedCharacters.map((char) => (
-            <SelectedCharacterTag
-              key={char}
-              character={char}
-              onRemove={() => handleRemoveCharacter(char)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Comparison Table */}
-      {selectedCharacters.length >= 2 && (
-        <>
-          <ComparisonTable characters={selectedCharacters} />
-          <CompareExport characters={selectedCharacters} />
-        </>
-      )}
+      {/* 검색/선택 UI */}
+      {/* 선택된 항목 표시 */}
+      {/* 결과 테이블/뷰 */}
     </div>
   );
 }
@@ -361,9 +340,9 @@ export function CompareClient() {
 - **Accent**: `#F59E0B` (Amber) - 강조, 하이라이트
 
 ### 도메인 색상
-- **Korea**: `#DC2626` (Red) - 한국 관련 요소
-- **Japan**: `#1E3A8A` (Navy) - 일본 관련 요소
-- **China**: `#CA8A04` (Gold) - 중국 관련 요소
+- **Category 1**: `#DC2626` (Red) - 카테고리 1 요소
+- **Category 2**: `#1E3A8A` (Navy) - 카테고리 2 요소
+- **Category 3**: `#CA8A04` (Gold) - 카테고리 3 요소
 
 ### 시맨틱 색상
 - **Success**: `#10B981` (Green) - 성공 메시지
@@ -463,6 +442,14 @@ export function CompareClient() {
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| 디자인 시스템 토큰과 기존 스타일 충돌 | 디자인 시스템 토큰을 우선, 기존 스타일을 점진적으로 제거 |
+| WCAG 색상 대비 미달 (4.5:1 미만) | WebAIM Contrast Checker로 확인, 배경 또는 텍스트 색상 조정 |
+| 다크 모드 렌더링 깨짐 | `dark:` 접두사 누락 확인, CSS 변수 기반으로 전환 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 컬러 팔레트 정의 완료
@@ -491,75 +478,3 @@ export function CompareClient() {
 "agent-system/agents/phase-3/13-data-engineer.md를 읽고 DEN으로 작동해주세요"
 ```
 
----
-
-## 💡 TriHanzi 실제 디자인 시스템
-
-**구현된 디자인 시스템**:
-
-### 1. 국가별 색상 체계
-```typescript
-// src/constants/colors.ts
-export const countryColors = {
-  korea: {
-    primary: '#DC2626',    // Red
-    light: '#FEE2E2',
-    dark: '#991B1B',
-  },
-  japan: {
-    primary: '#1E3A8A',    // Navy
-    light: '#DBEAFE',
-    dark: '#1E3A8A',
-  },
-  china: {
-    primary: '#CA8A04',    // Gold
-    light: '#FEF3C7',
-    dark: '#92400E',
-  },
-};
-```
-
-### 2. 구현된 컴포넌트 (41개)
-
-**UI 프리미티브** (`/ui/`):
-- `CountryBadge` - 국가 표시 배지 (국가별 색상)
-- `FalseFriendsAlert` - False Friends 경고
-- `SimilarityMeter` - 유사도 점수 표시 (0-100)
-- `Tabs` - 탭 네비게이션
-
-**비교 컴포넌트** (`/character/`):
-- `SideBySideComparison` - 나란히 비교
-- `OverlayComparison` - 오버레이 비교
-- `DifferenceVisualization` - 차이점 시각화
-- `MobileComparisonCarousel` - 모바일 캐러셀
-
-**기능 컴포넌트** (`/compare/`, `/search/`, `/collections/`):
-- `CompareClient` - 비교 페이지 메인
-- `CompareSearch` - 비교할 문자 검색
-- `CompareExport` - PDF 내보내기
-- `AdvancedSearchClient` - 고급 검색
-- `SearchFilters` - 검색 필터
-- `FalseFriendsCollectionClient` - False Friends 컬렉션
-
-### 3. 타이포그래피
-
-```typescript
-fontFamily: {
-  sans: ['Inter', 'Noto Sans KR', 'Noto Sans JP', 'Noto Sans SC', 'sans-serif'],
-  display: ['Poppins', 'sans-serif'],
-  mono: ['Fira Code', 'monospace'],
-}
-```
-
-### 4. 다크 모드
-모든 컴포넌트가 `dark:` 클래스로 다크 모드 지원.
-
-### 5. 접근성
-- WCAG AA 준수 (색상 대비 4.5:1 이상)
-- ARIA 레이블 모든 인터랙티브 요소
-- 키보드 네비게이션 지원
-
-**문서**:
-- `docs/design/README.md` - 디자인 시스템 개요
-- `docs/design/styles.md` - 색상, 타이포그래피
-- `docs/design/components.md` - 컴포넌트 가이드

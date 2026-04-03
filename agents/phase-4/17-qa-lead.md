@@ -36,7 +36,7 @@ export default defineConfig({
   reporter: 'html',
 
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.TEST_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -91,7 +91,7 @@ test.describe('Homepage', () => {
     await page.goto('/en');
 
     // 타이틀 확인
-    await expect(page).toHaveTitle(/TriHanzi/);
+    await expect(page).toHaveTitle(/[project-name]/);
 
     // 주요 요소 확인
     await expect(page.locator('h1')).toBeVisible();
@@ -110,14 +110,14 @@ test.describe('Homepage', () => {
     await expect(page).toHaveURL('/ko');
 
     // 콘텐츠 변경 확인 (한국어로)
-    await expect(page.locator('h1')).toContainText('한중일');
+    await expect(page.locator('h1')).toBeVisible();
   });
 
   test('should have working search bar', async ({ page }) => {
     await page.goto('/en');
 
     // 검색창에 입력
-    await page.fill('[data-testid="search-input"]', 'love');
+    await page.fill('[data-testid="search-input"]', 'keyword');
 
     // 자동완성 나타남
     await expect(page.locator('[data-testid="autocomplete"]')).toBeVisible();
@@ -139,11 +139,11 @@ test.describe('Homepage', () => {
 import { test, expect } from '@playwright/test';
 
 test.describe('Search Flow', () => {
-  test('should search for characters', async ({ page }) => {
+  test('should search for items', async ({ page }) => {
     await page.goto('/en/search');
 
     // 검색어 입력
-    await page.fill('[data-testid="search-input"]', 'love');
+    await page.fill('[data-testid="search-input"]', 'keyword');
     await page.click('[data-testid="search-button"]');
 
     // 로딩 상태
@@ -153,29 +153,29 @@ test.describe('Search Flow', () => {
     await expect(page.locator('[data-testid="search-results"]')).toBeVisible();
 
     // 결과 개수 확인
-    const results = page.locator('[data-testid="character-card"]');
-    await expect(results).toHaveCount.greaterThan(0);
+    const results = page.locator('[data-testid="result-card"]');
+    expect(await results.count()).toBeGreaterThan(0);
   });
 
   test('should filter search results', async ({ page }) => {
-    await page.goto('/en/search?q=love');
+    await page.goto('/en/search?q=keyword');
 
     // 필터 열기
     await page.click('[data-testid="filter-button"]');
 
-    // 국가 필터 선택
-    await page.check('[data-testid="filter-korea"]');
+    // 카테고리 필터 선택
+    await page.check('[data-testid="filter-[category]"]');
     await page.click('[data-testid="apply-filters"]');
 
     // URL 업데이트 확인
-    await expect(page).toHaveURL(/country=KOREA/);
+    await expect(page).toHaveURL(/category=/);
 
     // 결과 업데이트 확인
     await expect(page.locator('[data-testid="search-results"]')).toBeVisible();
   });
 
   test('should handle empty search results', async ({ page }) => {
-    await page.goto('/en/search?q=nonexistentcharacter123');
+    await page.goto('/en/search?q=nonexistentquery123');
 
     // 빈 결과 메시지
     await expect(page.locator('[data-testid="no-results"]')).toBeVisible();
@@ -210,18 +210,18 @@ test.describe('Search Flow', () => {
 import { test, expect } from '@playwright/test';
 
 test.describe('Compare Flow', () => {
-  test('should compare characters', async ({ page }) => {
+  test('should compare items', async ({ page }) => {
     await page.goto('/en/compare');
 
-    // 첫 번째 문자 검색
-    await page.fill('[data-testid="compare-search"]', '愛');
+    // 첫 번째 항목 검색
+    await page.fill('[data-testid="compare-search"]', 'item-a');
     await page.click('[data-testid="autocomplete-item-0"]');
 
-    // 선택된 문자 확인
-    await expect(page.locator('[data-testid="selected-愛"]')).toBeVisible();
+    // 선택된 항목 확인
+    await expect(page.locator('[data-testid="selected-item-0"]')).toBeVisible();
 
-    // 두 번째 문자 검색
-    await page.fill('[data-testid="compare-search"]', '恋');
+    // 두 번째 항목 검색
+    await page.fill('[data-testid="compare-search"]', 'item-b');
     await page.click('[data-testid="autocomplete-item-0"]');
 
     // 비교 테이블 표시
@@ -233,27 +233,27 @@ test.describe('Compare Flow', () => {
     );
   });
 
-  test('should remove selected character', async ({ page }) => {
+  test('should remove selected item', async ({ page }) => {
     await page.goto('/en/compare');
 
-    // 문자 선택
-    await page.fill('[data-testid="compare-search"]', '愛');
+    // 항목 선택
+    await page.fill('[data-testid="compare-search"]', 'item-a');
     await page.click('[data-testid="autocomplete-item-0"]');
 
     // 제거 버튼 클릭
-    await page.click('[data-testid="remove-愛"]');
+    await page.click('[data-testid="remove-item-0"]');
 
-    // 문자 제거 확인
-    await expect(page.locator('[data-testid="selected-愛"]')).not.toBeVisible();
+    // 항목 제거 확인
+    await expect(page.locator('[data-testid="selected-item-0"]')).not.toBeVisible();
   });
 
   test('should export comparison to PDF', async ({ page }) => {
     await page.goto('/en/compare');
 
-    // 2개 문자 선택
-    await page.fill('[data-testid="compare-search"]', '愛');
+    // 2개 항목 선택
+    await page.fill('[data-testid="compare-search"]', 'item-a');
     await page.click('[data-testid="autocomplete-item-0"]');
-    await page.fill('[data-testid="compare-search"]', '恋');
+    await page.fill('[data-testid="compare-search"]', 'item-b');
     await page.click('[data-testid="autocomplete-item-0"]');
 
     // PDF 내보내기 다운로드 시작 대기
@@ -267,48 +267,43 @@ test.describe('Compare Flow', () => {
 });
 ```
 
-**2.4 문자 상세 페이지 테스트**
+**2.4 [Resource] 상세 페이지 테스트**
 
 ```typescript
-// test/e2e/character-detail.spec.ts
+// test/e2e/resource-detail.spec.ts
 
 import { test, expect } from '@playwright/test';
 
-test.describe('Character Detail', () => {
-  test('should display character details', async ({ page }) => {
-    // 실제 문자 ID로 이동
-    await page.goto('/en/characters/clx123456');
+test.describe('Resource Detail', () => {
+  test('should display resource details', async ({ page }) => {
+    // 실제 리소스 ID로 이동
+    await page.goto('/en/[resources]/clx123456');
 
-    // 문자 표시 확인
-    await expect(page.locator('[data-testid="character-display"]')).toBeVisible();
+    // 리소스 표시 확인
+    await expect(page.locator('[data-testid="resource-display"]')).toBeVisible();
 
-    // 발음 섹션
-    await expect(page.locator('[data-testid="pronunciations"]')).toBeVisible();
+    // 상세 섹션
+    await expect(page.locator('[data-testid="details"]')).toBeVisible();
 
-    // 의미 섹션
-    await expect(page.locator('[data-testid="meanings"]')).toBeVisible();
-
-    // 국가별 배지
-    await expect(page.locator('[data-testid="country-badge-korea"]')).toBeVisible();
-    await expect(page.locator('[data-testid="country-badge-japan"]')).toBeVisible();
-    await expect(page.locator('[data-testid="country-badge-china"]')).toBeVisible();
+    // 메타데이터 섹션
+    await expect(page.locator('[data-testid="metadata"]')).toBeVisible();
   });
 
-  test('should show similar characters', async ({ page }) => {
-    await page.goto('/en/characters/clx123456');
+  test('should show related items', async ({ page }) => {
+    await page.goto('/en/[resources]/clx123456');
 
-    // 유사 문자 섹션
-    await expect(page.locator('[data-testid="similar-characters"]')).toBeVisible();
+    // 관련 항목 섹션
+    await expect(page.locator('[data-testid="related-items"]')).toBeVisible();
 
-    // 유사 문자 클릭
-    await page.click('[data-testid="similar-character-0"]');
+    // 관련 항목 클릭
+    await page.click('[data-testid="related-item-0"]');
 
-    // 새 문자 페이지로 이동
-    await expect(page).toHaveURL(/\/characters\//);
+    // 새 상세 페이지로 이동
+    await expect(page).toHaveURL(/\/[resources]\//);
   });
 
-  test('should handle 404 for non-existent character', async ({ page }) => {
-    await page.goto('/en/characters/nonexistent');
+  test('should handle 404 for non-existent resource', async ({ page }) => {
+    await page.goto('/en/[resources]/nonexistent');
 
     // 404 페이지
     await expect(page.locator('h1')).toContainText(/404|Not Found/i);
@@ -320,7 +315,7 @@ test.describe('Character Detail', () => {
 - [ ] 홈페이지 테스트
 - [ ] 검색 플로우 테스트
 - [ ] 비교 플로우 테스트
-- [ ] 문자 상세 페이지 테스트
+- [ ] [Resource] 상세 페이지 테스트
 - [ ] 404/에러 케이스 테스트
 - [ ] 모바일 반응형 테스트
 - [ ] 다국어 테스트
@@ -335,14 +330,14 @@ test.describe('Character Detail', () => {
 import { describe, it, expect } from 'vitest';
 
 describe('API Integration Tests', () => {
-  describe('GET /api/characters', () => {
-    it('should return paginated characters', async () => {
-      const response = await fetch('http://localhost:3000/api/characters?page=1&limit=10');
+  describe('GET /api/[resources]', () => {
+    it('should return paginated items', async () => {
+      const response = await fetch('http://localhost:3000/api/[resources]?page=1&limit=10');
       const data = await response.json();
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.data.characters).toHaveLength(10);
+      expect(data.data.items).toHaveLength(10);
       expect(data.data.pagination).toMatchObject({
         page: 1,
         limit: 10,
@@ -351,18 +346,18 @@ describe('API Integration Tests', () => {
       });
     });
 
-    it('should filter by country', async () => {
-      const response = await fetch('http://localhost:3000/api/characters?country=KOREA');
+    it('should filter by category', async () => {
+      const response = await fetch('http://localhost:3000/api/[resources]?category=[category]');
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      data.data.characters.forEach((char: any) => {
-        expect(char.countries).toContain('KOREA');
+      data.data.items.forEach((item: any) => {
+        expect(item.category).toBe('[category]');
       });
     });
 
-    it('should handle invalid country parameter', async () => {
-      const response = await fetch('http://localhost:3000/api/characters?country=INVALID');
+    it('should handle invalid category parameter', async () => {
+      const response = await fetch('http://localhost:3000/api/[resources]?category=INVALID');
       const data = await response.json();
 
       expect(response.status).toBe(400);
@@ -373,11 +368,11 @@ describe('API Integration Tests', () => {
     it('should respect rate limit', async () => {
       // 10개 요청 (제한)
       for (let i = 0; i < 10; i++) {
-        await fetch('http://localhost:3000/api/characters');
+        await fetch('http://localhost:3000/api/[resources]');
       }
 
       // 11번째 요청 (초과)
-      const response = await fetch('http://localhost:3000/api/characters');
+      const response = await fetch('http://localhost:3000/api/[resources]');
 
       expect(response.status).toBe(429);
       expect(response.headers.get('X-RateLimit-Limit')).toBe('10');
@@ -385,12 +380,12 @@ describe('API Integration Tests', () => {
   });
 
   describe('GET /api/search', () => {
-    it('should search characters by meaning', async () => {
-      const response = await fetch('http://localhost:3000/api/search?q=love');
+    it('should search items by keyword', async () => {
+      const response = await fetch('http://localhost:3000/api/search?q=keyword');
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.data.characters.length).toBeGreaterThan(0);
+      expect(data.data.items.length).toBeGreaterThan(0);
     });
 
     it('should return empty results for nonexistent query', async () => {
@@ -398,29 +393,7 @@ describe('API Integration Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.data.characters).toHaveLength(0);
-    });
-  });
-
-  describe('GET /api/compare', () => {
-    it('should compare two characters', async () => {
-      const response = await fetch('http://localhost:3000/api/compare?chars=愛,恋');
-      const data = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(data.data.comparison.characters).toHaveLength(2);
-      expect(data.data.comparison.similarities).toMatchObject({
-        visual: expect.any(Number),
-        meaning: expect.any(Number),
-      });
-    });
-
-    it('should require at least 2 characters', async () => {
-      const response = await fetch('http://localhost:3000/api/compare?chars=愛');
-      const data = await response.json();
-
-      expect(response.status).toBe(400);
-      expect(data.error.code).toBe('INVALID_INPUT');
+      expect(data.data.items).toHaveLength(0);
     });
   });
 });
@@ -459,7 +432,7 @@ module.exports = {
         'http://localhost:3000/en',
         'http://localhost:3000/en/search',
         'http://localhost:3000/en/compare',
-        'http://localhost:3000/en/characters/clx123456',
+        'http://localhost:3000/en/[resources]/clx123456',
       ],
       numberOfRuns: 3,
     },
@@ -509,7 +482,7 @@ module.exports = {
 - ✅ 홈페이지 (3 테스트)
 - ✅ 검색 플로우 (4 테스트)
 - ✅ 비교 플로우 (3 테스트)
-- ✅ 문자 상세 (3 테스트)
+- ✅ [Resource] 상세 (3 테스트)
 - ✅ 다국어 (4 테스트)
 - ✅ 모바일 (4 테스트)
 - ✅ 에러 케이스 (4 테스트)
@@ -527,7 +500,7 @@ module.exports = {
 | 홈페이지 | 92 | 100 | 100 | 96 |
 | 검색 | 89 | 100 | 100 | 96 |
 | 비교 | 87 | 100 | 100 | 96 |
-| 문자 상세 | 91 | 100 | 100 | 96 |
+| [Resource] 상세 | 91 | 100 | 100 | 96 |
 
 **평균**:
 - Performance: **89.75** ✅ (>= 85)
@@ -550,7 +523,7 @@ module.exports = {
    - `test/e2e/home.spec.ts`
    - `test/e2e/search.spec.ts`
    - `test/e2e/compare.spec.ts`
-   - `test/e2e/character-detail.spec.ts`
+   - `test/e2e/resource-detail.spec.ts`
 
 2. **통합 테스트**:
    - `test/integration/api.test.ts`
@@ -563,6 +536,15 @@ module.exports = {
    - `docs/reports/phase-4-quality-report.md`
 
 ---
+
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| E2E 테스트 Flaky (실행마다 결과 다름) | `test.retry(2)` 설정, 테스트 간 상태 격리 확인, 네트워크 의존성 제거 |
+| Lighthouse 점수 편차 > 5점 | `numberOfRuns`를 5로 증가, median 값 사용 |
+| 테스트 타임아웃 | `timeout: 30000` 설정, 느린 API에 대해 `waitForResponse` 사용 |
+| 접근성 테스트 실패 | `@axe-core/playwright`로 구체적 위반 사항 확인, WCAG AA 기준으로 수정 |
 
 ## ✅ 완료 체크리스트
 
@@ -593,18 +575,3 @@ module.exports = {
 
 ---
 
-## 💡 TriHanzi 실제 테스트
-
-**E2E 테스트** (Playwright):
-- 총 28개 테스트
-- 100% 통과율
-- 브라우저: Chrome, Firefox, Safari
-- 모바일: Pixel 5, iPhone 12
-
-**Lighthouse 점수**:
-| 메트릭 | 점수 | 목표 | 결과 |
-|--------|------|------|------|
-| Performance | 92 | >= 85 | ✅ |
-| Accessibility | 100 | >= 85 | ✅ |
-| SEO | 100 | >= 90 | ✅ |
-| Best Practices | 96 | >= 85 | ✅ |

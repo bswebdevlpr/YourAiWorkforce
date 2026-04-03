@@ -305,6 +305,14 @@ pnpm test --coverage
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| 테스트 커버리지 < 70% | 커버리지가 낮은 파일 식별 (`--coverage` 리포트), 해당 파일의 핵심 함수에 테스트 추가 |
+| 테스트 실행 시 타임아웃 | API 목업을 사용하여 네트워크 의존성 제거. `jest.setTimeout(10000)` 설정 |
+| Flaky 테스트 (실행마다 결과 다름) | 랜덤 데이터 제거, 테스트 간 상태 격리 (`beforeEach`로 초기화) |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 테스트 전략 문서 작성
@@ -331,22 +339,3 @@ pnpm test --coverage
 "agent-system/agents/phase-3/11-algorithm-engineer.md를 읽고 AEA로 작동해주세요"
 ```
 
----
-
-## 💡 TriHanzi 실제 테스트
-
-**테스트 파일** (15개):
-- API 테스트: 8개
-- 컴포넌트 테스트: 5개
-- 유틸리티 테스트: 2개
-
-**커버리지**:
-- 전체: 78.5%
-- API: 100%
-- 컴포넌트: 72.3%
-- 유틸리티: 95.1%
-
-**테스트 도구**:
-- Vitest
-- @testing-library/react
-- @testing-library/jest-dom

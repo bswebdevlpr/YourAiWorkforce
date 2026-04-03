@@ -7,9 +7,11 @@
 ## 📥 입력
 
 - ✅ **필수**: 사용자 아이디어 (자유 형식 텍스트)
-  - 예: "한중일 한자를 비교하는 웹사이트를 만들고 싶어"
   - 예: "AI 기반 음식 추천 앱"
+  - 예: "부동산 검색 웹사이트를 만들고 싶어"
 - ⚠️ **선택**: 제약사항 (예산 범위, 타임라인, 대상 사용자층)
+
+> ⚠️ 입력에 구체적 예산 금액, API 키, 비밀번호 등 민감 정보를 포함하지 않는다.
 
 ---
 
@@ -23,17 +25,22 @@
 [Action] + [Domain Object] + [Platform]
 ```
 
-**예시**: "한중일 한자를 **비교**하는 **웹사이트**" → 비교(Action), 한자(Domain Object), 웹(Platform)
+**예시**: "AI 기반 음식을 **추천**하는 **앱**" → 추천(Action), 음식(Domain Object), 앱(Platform)
 
 또한 도메인 전문가 생성(DEA)에 필요한 키워드를 추출한다:
-- **기술 도메인**: [예: Web Community Platform, Content Curation, Unicode Processing]
-- **학문 도메인**: [예: Comparative Linguistics, East Asian Studies, Fandom Studies]
-- **하위 도메인**: [예: User-generated Content, Gamified Learning, Han Character Variants]
+- **기술 도메인**: [예: Web Community Platform, Content Curation, Recommendation Engine]
+- **학문 도메인**: [예: Nutrition Science, Urban Planning, Fandom Studies]
+- **하위 도메인**: [예: User-generated Content, Gamified Learning, Dietary Restrictions]
 
 **예외 처리**:
 - Action이 식별되지 않는 경우: 사용자에게 핵심 기능을 질문한다
 - Domain Object가 너무 광범위한 경우: 범위 축소를 요청한다 (예: "음식" → "한식 레시피")
 - Platform이 명시되지 않은 경우: 웹을 기본값으로 가정하되, 사용자에게 확인한다
+
+**자율 실행 시 기본값**:
+- Action이 식별되지 않는 경우: 도메인의 가장 일반적인 Action(검색, 조회, 비교 중 택1)을 가정한다
+- Domain Object가 너무 광범위한 경우: PRD 작성 후 사용자 확인 시점에서 조정한다
+- Platform이 명시되지 않은 경우: 웹(Web)을 기본값으로 사용한다
 
 **체크리스트**:
 - [ ] 핵심 동사(Action) 식별됨
@@ -69,6 +76,11 @@
 
 **8-15개 기능**을 식별하고 다음 카테고리로 분류한다. 입력에 예산/타임라인 제약이 있으면 P0 범위를 이에 맞게 조정한다.
 
+**P0 범위 조정 기준**:
+- 타임라인 2주 이하: P0 기능 최대 2개
+- 타임라인 2-4주: P0 기능 최대 4개
+- 타임라인 4주 이상 또는 미지정: P0 기능 최대 5개
+
 | 우선순위 | 정의 |
 |---------|------|
 | **P0** | MVP 필수. 이것 없으면 제품이 작동하지 않음 |
@@ -97,6 +109,7 @@
 - [ ] P1 기능 3-7개
 - [ ] P2/P3 기능 합쳐서 5-10개
 - [ ] 각 기능이 페르소나의 목표와 연결됨
+- [ ] 페르소나 간 목표 충돌 시 P0 사용자(첫 번째 페르소나)를 우선한다
 - [ ] 제약사항(예산/타임라인)이 P0 범위에 반영됨
 
 > 💬 사용자 확인: "기능 우선순위 분류를 완료했어요. P0 기능이 적절한지 확인해주세요."

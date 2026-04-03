@@ -23,10 +23,10 @@
 2. 알고리즘 출력 데이터를 데이터베이스에 저장해야 하는가?
 3. 사전 계산이 필요한 파생 데이터가 있는가?
 
-**예시 (TriHanzi)**:
-- **유사도 알고리즘** → 의미 키워드 필요 → 이미 존재 ✅
-- **발음 유추 알고리즘** → 일본어 음독 필요 → 이미 존재 ✅
-- **False Friends 감지** → 유사도 점수 저장 필요 → 새 테이블 필요 ❌
+**예시**:
+- **유사도 알고리즘** → 비교 대상 데이터 필요 → 이미 존재 ✅
+- **매칭 알고리즘** → 관련 속성 데이터 필요 → 이미 존재 ✅
+- **이상 탐지 알고리즘** → 탐지 결과 저장 필요 → 새 테이블 필요 ❌
 
 **체크리스트**:
 - [ ] 알고리즘 입력 데이터 확인
@@ -39,28 +39,27 @@
 
 알고리즘 출력을 저장할 테이블/필드를 추가하세요.
 
-**예시: 비교 메타데이터 테이블**
+**예시: 파생 데이터 테이블**
 
 ```prisma
 // prisma/schema.prisma
 
-model ComparisonMetadata {
+model [DerivedEntity] {
   id String @id @default(cuid())
 
-  // 비교 대상
-  character1Id String
-  character1   Character @relation("comparison1", fields: [character1Id], references: [id])
+  // 비교/연산 대상
+  resource1Id String
+  resource1   [Resource] @relation("derived1", fields: [resource1Id], references: [id])
 
-  character2Id String
-  character2   Character @relation("comparison2", fields: [character2Id], references: [id])
+  resource2Id String
+  resource2   [Resource] @relation("derived2", fields: [resource2Id], references: [id])
 
-  // 유사도 점수
-  visualSimilarity   Float  // 0-100
-  meaningSimilarity  Float  // 0-100
-  pronunciationSimilarity Float? // 0-100 (nullable)
+  // 알고리즘 산출 점수
+  similarityScore  Float  // 0-100
+  matchScore       Float  // 0-100
 
-  // False Friend 여부
-  isFalseFriend Boolean @default(false)
+  // 특이 케이스 여부
+  isException Boolean @default(false)
 
   // 신뢰도
   confidence Float @default(100)
@@ -68,9 +67,9 @@ model ComparisonMetadata {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([character1Id, character2Id])
-  @@index([isFalseFriend])
-  @@index([visualSimilarity])
+  @@unique([resource1Id, resource2Id])
+  @@index([isException])
+  @@index([similarityScore])
 }
 ```
 
@@ -93,75 +92,77 @@ npx prisma migrate dev --name add_comparison_metadata
 모든 데이터에 대해 알고리즘을 실행하고 결과를 저장하세요.
 
 ```typescript
-// scripts/enrichment/compute-comparison-metadata.ts
+// scripts/enrichment/compute-derived-metadata.ts
 
 import { PrismaClient } from '@prisma/client';
-import { calculateSimilarity } from '@/lib/algorithms/similarity';
-import { detectFalseFriends } from '@/lib/algorithms/matching';
+// ⚠️ 아래 함수들은 Phase 3 Algorithm Engineer(11)가 `src/lib/algorithms/`에 구현한 함수를 import한다.
+// 실행 전 다음을 확인한다:
+// 1. `src/lib/algorithms/` 디렉토리에서 export된 함수 목록을 확인한다
+// 2. 함수명이 다를 경우 실제 export 이름에 맞게 import를 수정한다
+// 3. 함수 시그니처(입력 타입, 반환 타입)를 확인하고 호출 코드를 맞춘다
+import { [algorithmFunction1] } from '@/lib/algorithms/similarity';
+import { [algorithmFunction2] } from '@/lib/algorithms/matching';
 
 const prisma = new PrismaClient();
 
-async function computeComparisonMetadata() {
-  console.log('🔄 비교 메타데이터 생성');
+async function computeDerivedMetadata() {
+  console.log('🔄 파생 메타데이터 생성');
   console.log('='.repeat(50));
 
-  // 1. 모든 문자 가져오기
-  const characters = await prisma.character.findMany({
+  // 1. 모든 리소스 가져오기
+  const resources = await prisma.[resource].findMany({
     include: {
-      meanings: true,
-      pronunciations: true,
+      relatedData: true,
     },
   });
 
-  console.log(`\n총 문자: ${characters.length}개`);
+  console.log(`\n총 리소스: ${resources.length}개`);
 
   let computed = 0;
-  let falseFriendsCount = 0;
+  let exceptionCount = 0;
+
+  // ⚠️ **성능 주의**: 레코드 N개에 대해 N×(N-1)/2 쌍을 처리한다. N=10,000이면 ~5천만 쌍.
+  // - N ≤ 1,000: 단일 스크립트로 처리 가능
+  // - N > 1,000: 배치 처리 (1,000건 단위), `Promise.all` 대신 순차 처리로 메모리 관리
+  // - 처리 시간을 로그로 출력하여 진행률을 추적한다
 
   // 2. 모든 페어 조합 계산
-  for (let i = 0; i < characters.length; i++) {
-    for (let j = i + 1; j < characters.length; j++) {
-      const char1 = characters[i];
-      const char2 = characters[j];
+  for (let i = 0; i < resources.length; i++) {
+    for (let j = i + 1; j < resources.length; j++) {
+      const item1 = resources[i];
+      const item2 = resources[j];
 
       try {
         // 알고리즘 실행
-        const meaningResult = calculateSimilarity(
-          char1.meanings.map(m => m.text),
-          char2.meanings.map(m => m.text)
-        );
+        const similarityResult = [algorithmFunction1](item1, item2);
+        const matchScore = [algorithmFunction2](item1, item2);
 
-        const visualSimilarity = calculateVisualSimilarity(char1.char, char2.char);
+        // 특이 케이스 탐지
+        const isException = similarityResult.score > 70 && matchScore < 30;
 
-        // False Friend 감지
-        const isFalseFriend = detectFalseFriends(
-          visualSimilarity,
-          meaningResult.score
-        );
-
-        if (isFalseFriend) falseFriendsCount++;
+        if (isException) exceptionCount++;
 
         // 데이터베이스에 저장
-        await prisma.comparisonMetadata.upsert({
+        await prisma.[derivedEntity].upsert({
           where: {
-            character1Id_character2Id: {
-              character1Id: char1.id,
-              character2Id: char2.id,
+            resource1Id_resource2Id: {
+              resource1Id: item1.id,
+              resource2Id: item2.id,
             },
           },
           update: {
-            visualSimilarity,
-            meaningSimilarity: meaningResult.score,
-            isFalseFriend,
-            confidence: meaningResult.confidence,
+            similarityScore: similarityResult.score,
+            matchScore,
+            isException,
+            confidence: similarityResult.confidence,
           },
           create: {
-            character1Id: char1.id,
-            character2Id: char2.id,
-            visualSimilarity,
-            meaningSimilarity: meaningResult.score,
-            isFalseFriend,
-            confidence: meaningResult.confidence,
+            resource1Id: item1.id,
+            resource2Id: item2.id,
+            similarityScore: similarityResult.score,
+            matchScore,
+            isException,
+            confidence: similarityResult.confidence,
           },
         });
 
@@ -171,16 +172,16 @@ async function computeComparisonMetadata() {
           console.log(`  진행: ${computed} 페어 계산...`);
         }
       } catch (error) {
-        console.error(`  ✗ 오류: ${char1.char} vs ${char2.char}`, error);
+        console.error(`  ✗ 오류: ${item1.id} vs ${item2.id}`, error);
       }
     }
   }
 
   console.log(`\n✅ 완료: ${computed} 페어 계산`);
-  console.log(`False Friends: ${falseFriendsCount}개`);
+  console.log(`특이 케이스: ${exceptionCount}개`);
 }
 
-computeComparisonMetadata()
+computeDerivedMetadata()
   .then(() => prisma.$disconnect())
   .catch((e) => {
     console.error(e);
@@ -220,53 +221,53 @@ async function validateComputedData() {
   console.log('='.repeat(50));
 
   // 1. 총 레코드 수
-  const totalMetadata = await prisma.comparisonMetadata.count();
+  const totalMetadata = await prisma.[derivedEntity].count();
   console.log(`\n총 메타데이터: ${totalMetadata}개`);
 
-  // 2. False Friends 통계
-  const falseFriends = await prisma.comparisonMetadata.count({
-    where: { isFalseFriend: true },
+  // 2. 특이 케이스 통계
+  const exceptions = await prisma.[derivedEntity].count({
+    where: { isException: true },
   });
-  console.log(`False Friends: ${falseFriends}개 (${(falseFriends / totalMetadata * 100).toFixed(2)}%)`);
+  console.log(`특이 케이스: ${exceptions}개 (${(exceptions / totalMetadata * 100).toFixed(2)}%)`);
 
   // 3. 유사도 분포
-  const avgMeaningSimilarity = await prisma.comparisonMetadata.aggregate({
-    _avg: { meaningSimilarity: true },
+  const avgSimilarity = await prisma.[derivedEntity].aggregate({
+    _avg: { similarityScore: true },
   });
-  console.log(`평균 의미 유사도: ${avgMeaningSimilarity._avg.meaningSimilarity?.toFixed(2)}`);
+  console.log(`평균 유사도: ${avgSimilarity._avg.similarityScore?.toFixed(2)}`);
 
   // 4. 신뢰도 분포
-  const avgConfidence = await prisma.comparisonMetadata.aggregate({
+  const avgConfidence = await prisma.[derivedEntity].aggregate({
     _avg: { confidence: true },
   });
   console.log(`평균 신뢰도: ${avgConfidence._avg.confidence?.toFixed(2)}`);
 
   // 5. 샘플 검증
-  console.log('\n📊 샘플 검증 (상위 5개 False Friends):');
-  const samples = await prisma.comparisonMetadata.findMany({
-    where: { isFalseFriend: true },
+  console.log('\n📊 샘플 검증 (상위 5개 특이 케이스):');
+  const samples = await prisma.[derivedEntity].findMany({
+    where: { isException: true },
     include: {
-      character1: true,
-      character2: true,
+      resource1: true,
+      resource2: true,
     },
-    orderBy: { visualSimilarity: 'desc' },
+    orderBy: { similarityScore: 'desc' },
     take: 5,
   });
 
   samples.forEach((sample, i) => {
-    console.log(`  ${i + 1}. ${sample.character1.char} vs ${sample.character2.char}`);
-    console.log(`     시각 유사도: ${sample.visualSimilarity.toFixed(2)}, 의미 유사도: ${sample.meaningSimilarity.toFixed(2)}`);
+    console.log(`  ${i + 1}. ${sample.resource1.id} vs ${sample.resource2.id}`);
+    console.log(`     유사도: ${sample.similarityScore.toFixed(2)}, 매칭: ${sample.matchScore.toFixed(2)}`);
   });
 
   // 6. 품질 체크
   const issues = [];
 
   // 6.1. NULL 체크
-  const nullCount = await prisma.comparisonMetadata.count({
+  const nullCount = await prisma.[derivedEntity].count({
     where: {
       OR: [
-        { visualSimilarity: null },
-        { meaningSimilarity: null },
+        { similarityScore: null },
+        { matchScore: null },
       ],
     },
   });
@@ -275,13 +276,13 @@ async function validateComputedData() {
   }
 
   // 6.2. 범위 체크 (0-100)
-  const outOfRange = await prisma.comparisonMetadata.count({
+  const outOfRange = await prisma.[derivedEntity].count({
     where: {
       OR: [
-        { visualSimilarity: { lt: 0 } },
-        { visualSimilarity: { gt: 100 } },
-        { meaningSimilarity: { lt: 0 } },
-        { meaningSimilarity: { gt: 100 } },
+        { similarityScore: { lt: 0 } },
+        { similarityScore: { gt: 100 } },
+        { matchScore: { lt: 0 } },
+        { matchScore: { gt: 100 } },
       ],
     },
   });
@@ -322,23 +323,23 @@ validateComputedData()
 async function generateReport() {
   const report = {
     date: new Date().toISOString(),
-    totalMetadata: await prisma.comparisonMetadata.count(),
-    falseFriends: await prisma.comparisonMetadata.count({
-      where: { isFalseFriend: true },
+    totalMetadata: await prisma.[derivedEntity].count(),
+    exceptions: await prisma.[derivedEntity].count({
+      where: { isException: true },
     }),
     statistics: {
-      avgMeaningSimilarity: (
-        await prisma.comparisonMetadata.aggregate({
-          _avg: { meaningSimilarity: true },
+      avgSimilarityScore: (
+        await prisma.[derivedEntity].aggregate({
+          _avg: { similarityScore: true },
         })
-      )._avg.meaningSimilarity,
-      avgVisualSimilarity: (
-        await prisma.comparisonMetadata.aggregate({
-          _avg: { visualSimilarity: true },
+      )._avg.similarityScore,
+      avgMatchScore: (
+        await prisma.[derivedEntity].aggregate({
+          _avg: { matchScore: true },
         })
-      )._avg.visualSimilarity,
+      )._avg.matchScore,
       avgConfidence: (
-        await prisma.comparisonMetadata.aggregate({
+        await prisma.[derivedEntity].aggregate({
           _avg: { confidence: true },
         })
       )._avg.confidence,
@@ -382,6 +383,14 @@ async function generateReport() {
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| Algorithm 함수 import 실패 | `src/lib/algorithms/` 디렉토리 확인, 함수명 매핑표 작성 후 수정 |
+| 연산 중 메모리 부족 | 배치 크기 축소 (1,000 → 100), 중간 결과를 DB에 저장 후 이어서 처리 |
+| 파생 데이터 품질 < 80% | Algorithm Engineer에게 알고리즘 정확도 재검증 요청 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 알고리즘 데이터 요구사항 분석 완료
@@ -406,82 +415,3 @@ async function generateReport() {
 "agent-system/agents/phase-2/10-qa-lead.md를 읽고 QLA로 작동해주세요 (Phase 3 품질 검증)"
 ```
 
----
-
-## 💡 TriHanzi 실제 알고리즘 데이터
-
-**생성된 데이터**:
-
-### 1. ComparisonMetadata 테이블
-```prisma
-model ComparisonMetadata {
-  id                   String    @id @default(cuid())
-  character1Id         String
-  character2Id         String
-  visualSimilarity     Float
-  meaningSimilarity    Float
-  pronunciationSimilarity Float?
-  isFalseFriend        Boolean   @default(false)
-  confidence           Float     @default(100)
-
-  character1 Character @relation("comparison1", fields: [character1Id], references: [id])
-  character2 Character @relation("comparison2", fields: [character2Id], references: [id])
-
-  @@unique([character1Id, character2Id])
-  @@index([isFalseFriend])
-}
-```
-
-### 2. False Friends 데이터
-- **총 662개 False Friends 감지**
-- **기준**: 시각 유사도 > 70% AND 의미 유사도 < 30%
-
-**예시**:
-| 문자 1 | 문자 2 | 시각 유사도 | 의미 유사도 | False Friend |
-|-------|-------|------------|------------|--------------|
-| 手 (hand) | 毛 (hair) | 85.2 | 12.3 | ✅ |
-| 青 (blue) | 清 (clear) | 78.5 | 28.4 | ✅ |
-| 日 (sun) | 目 (eye) | 72.1 | 15.7 | ✅ |
-
-### 3. 스크립트 실행 결과
-```bash
-$ ts-node scripts/enrichment/compute-comparison-metadata.ts
-
-🔄 비교 메타데이터 생성
-==================================================
-
-총 문자: 10,000개
-  진행: 100 페어 계산...
-  진행: 200 페어 계산...
-  ...
-  진행: 49,950,000 페어 계산...
-
-✅ 완료: 49,995,000 페어 계산
-False Friends: 662개
-
-⏱️  소요 시간: 47분 32초
-```
-
-### 4. 검증 결과
-```json
-{
-  "date": "2026-01-15T10:23:45.000Z",
-  "totalMetadata": 49995000,
-  "falseFriends": 662,
-  "statistics": {
-    "avgMeaningSimilarity": 45.2,
-    "avgVisualSimilarity": 32.1,
-    "avgConfidence": 94.7
-  },
-  "qualityCheck": {
-    "nullCount": 0,
-    "outOfRangeCount": 0,
-    "passed": true
-  }
-}
-```
-
-### 5. 최적화
-- **배치 크기**: 1000개
-- **병렬 처리**: 4개 워커
-- **소요 시간**: 47분 (단일 스레드 대비 75% 단축)

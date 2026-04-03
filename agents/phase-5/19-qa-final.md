@@ -23,10 +23,10 @@
 
 | # | 이슈 | 상태 | 해결 방법 | 검증 |
 |---|------|------|-----------|------|
-| 1 | 발음 누락: 樂(락/낙) | ✅ | `update-pronunciation.ts` 실행 | SQL 쿼리 확인 |
-| 2 | 의미 누락: 間(room) | ✅ | `enrich-meanings.ts` 실행 | 데이터 확인 |
-| 3 | 두음법칙 미처리 | ✅ | `handle-dueum.ts` 추가 | 알고리즘 테스트 |
-| 4 | 한국 교육 분류 누락 | ⏳ | 데이터 소스 조사 중 | - |
+| 1 | [데이터 누락 항목 A] | ✅ | `update-data.ts` 실행 | 쿼리 확인 |
+| 2 | [데이터 누락 항목 B] | ✅ | `enrich-data.ts` 실행 | 데이터 확인 |
+| 3 | [알고리즘 이슈] | ✅ | 알고리즘 규칙 추가 | 테스트 확인 |
+| 4 | [분류 누락] | ⏳ | 데이터 소스 조사 중 | - |
 
 **이슈 요약**:
 - ✅ 해결: 3개
@@ -79,31 +79,30 @@ npm run test:api      # API 통합 테스트
 **새로운 테스트 추가** (Phase 5 수정사항):
 
 ```typescript
-// test/unit/pronunciation-dueum.test.ts
+// test/unit/domain-algorithm.test.ts
 
 import { describe, it, expect } from 'vitest';
-import { applyDueumRule } from '@/lib/algorithms/pronunciation';
+import { applyDomainRule } from '@/lib/algorithms/[domain]';
 
-describe('Dueum Rule (두음법칙)', () => {
-  it('should apply 녀 → 여', () => {
-    const result = applyDueumRule('녀', 'initial');
-    expect(result).toBe('여');
+describe('Domain-specific Algorithm', () => {
+  it('should apply rule for standard case', () => {
+    const result = applyDomainRule('input-a', 'context-1');
+    expect(result).toBe('expected-output-a');
   });
 
-  it('should apply 랴 → 야', () => {
-    const result = applyDueumRule('랴', 'initial');
-    expect(result).toBe('야');
+  it('should apply rule for variant case', () => {
+    const result = applyDomainRule('input-b', 'context-1');
+    expect(result).toBe('expected-output-b');
   });
 
-  it('should not apply in non-initial position', () => {
-    const result = applyDueumRule('녀', 'medial');
-    expect(result).toBe('녀');
+  it('should not apply rule in excluded context', () => {
+    const result = applyDomainRule('input-a', 'context-2');
+    expect(result).toBe('input-a');
   });
 
-  it('should handle edge case: 李 vs 리', () => {
-    // 성씨는 예외
-    const result = applyDueumRule('리', 'surname');
-    expect(result).toBe('리'); // 예외
+  it('should handle edge case: exception rule', () => {
+    const result = applyDomainRule('input-c', 'exception');
+    expect(result).toBe('input-c'); // 예외
   });
 });
 ```
@@ -131,57 +130,53 @@ async function finalDataQuality() {
   console.log('='.repeat(50));
 
   // 1. 커버리지 메트릭
-  const totalCharacters = await prisma.character.count();
+  const totalRecords = await prisma.[resource].count();
 
-  const pronunciationCoverage = {
-    korea: await prisma.pronunciation.count({
-      where: { country: 'KOREA' },
+  const categoryCoverage = {
+    categoryA: await prisma.[detail].count({
+      where: { category: 'A' },
     }),
-    japan: await prisma.pronunciation.count({
-      where: { country: 'JAPAN' },
-    }),
-    china: await prisma.pronunciation.count({
-      where: { country: 'CHINA' },
+    categoryB: await prisma.[detail].count({
+      where: { category: 'B' },
     }),
   };
 
-  const meaningCoverage = await prisma.meaning.count();
+  const metadataCoverage = await prisma.[metadata].count();
 
-  console.log(`\n총 문자: ${totalCharacters}개`);
-  console.log(`발음 커버리지:`);
-  console.log(`  한국: ${(pronunciationCoverage.korea / totalCharacters * 100).toFixed(2)}%`);
-  console.log(`  일본: ${(pronunciationCoverage.japan / totalCharacters * 100).toFixed(2)}%`);
-  console.log(`  중국: ${(pronunciationCoverage.china / totalCharacters * 100).toFixed(2)}%`);
-  console.log(`의미 커버리지: ${(meaningCoverage / totalCharacters * 100).toFixed(2)}%`);
+  console.log(`\n총 레코드: ${totalRecords}개`);
+  console.log(`카테고리별 커버리지:`);
+  console.log(`  카테고리 A: ${(categoryCoverage.categoryA / totalRecords * 100).toFixed(2)}%`);
+  console.log(`  카테고리 B: ${(categoryCoverage.categoryB / totalRecords * 100).toFixed(2)}%`);
+  console.log(`메타데이터 커버리지: ${(metadataCoverage / totalRecords * 100).toFixed(2)}%`);
 
   // 2. 품질 이슈 체크
   const issues = [];
 
   // NULL 체크
-  const nullPronunciations = await prisma.character.count({
+  const nullDetails = await prisma.[resource].count({
     where: {
-      pronunciations: { none: {} },
+      details: { none: {} },
     },
   });
 
-  if (nullPronunciations > 0) {
-    issues.push(`발음 누락: ${nullPronunciations}개 문자`);
+  if (nullDetails > 0) {
+    issues.push(`상세 정보 누락: ${nullDetails}개 레코드`);
   }
 
   // 중복 체크
   const duplicates = await prisma.$queryRaw`
-    SELECT "text", "country", COUNT(*) as count
-    FROM "Pronunciation"
-    GROUP BY "text", "country", "characterId"
+    SELECT "value", "category", COUNT(*) as count
+    FROM "[Detail]"
+    GROUP BY "value", "category", "[resourceId]"
     HAVING COUNT(*) > 1
   `;
 
   if ((duplicates as any[]).length > 0) {
-    issues.push(`중복 발음: ${(duplicates as any[]).length}개`);
+    issues.push(`중복 데이터: ${(duplicates as any[]).length}개`);
   }
 
   // 3. 신뢰도 분포
-  const avgConfidence = await prisma.pronunciation.aggregate({
+  const avgConfidence = await prisma.[detail].aggregate({
     _avg: { confidence: true },
     where: {
       confidence: { not: null },
@@ -195,13 +190,13 @@ async function finalDataQuality() {
 
   const gates = [
     {
-      name: '발음 커버리지 (한국)',
-      value: (pronunciationCoverage.korea / totalCharacters) * 100,
+      name: '[metric] 커버리지 (카테고리 A)',
+      value: (categoryCoverage.categoryA / totalRecords) * 100,
       threshold: 70,
     },
     {
-      name: '의미 커버리지',
-      value: (meaningCoverage / totalCharacters) * 100,
+      name: '메타데이터 커버리지',
+      value: (metadataCoverage / totalRecords) * 100,
       threshold: 80,
     },
     {
@@ -237,6 +232,13 @@ async function finalDataQuality() {
     console.log('\n❌ 품질 게이트 실패');
     process.exit(1);
   }
+
+  // 품질 기준 미달 시 빌드 실패
+  if (accuracy < 0.95 || coverage < 0.80) {
+    console.error('❌ 품질 기준 미달. 위 항목을 수정 후 재실행하세요.');
+    process.exit(1);
+  }
+  console.log('✅ 모든 품질 기준 통과');
 }
 
 finalDataQuality()
@@ -278,16 +280,18 @@ import { describe, it, expect } from 'vitest';
 describe('API Performance', () => {
   it('should respond within 200ms for search', async () => {
     const start = Date.now();
-    const response = await fetch('http://localhost:3000/api/search?q=love');
+    const response = await fetch('http://localhost:3000/api/search?q=keyword');
     const duration = Date.now() - start;
 
     expect(response.status).toBe(200);
     expect(duration).toBeLessThan(200);
   });
 
-  it('should respond within 100ms for character detail', async () => {
+> 성능 테스트는 10회 실행하여 95th percentile 기준으로 판단한다. 단일 실행 결과로 판정하지 않는다.
+
+  it('should respond within 100ms for resource detail', async () => {
     const start = Date.now();
-    const response = await fetch('http://localhost:3000/api/characters/clx123456');
+    const response = await fetch('http://localhost:3000/api/[resources]/clx123456');
     const duration = Date.now() - start;
 
     expect(response.status).toBe(200);
@@ -317,10 +321,10 @@ describe('API Performance', () => {
 
 | 이슈 | 상태 | 해결 방법 |
 |------|------|-----------|
-| 발음 누락: 樂(락/낙) | ✅ | 데이터 추가 |
-| 의미 누락: 間(room) | ✅ | 데이터 추가 |
-| 두음법칙 미처리 | ✅ | 알고리즘 추가 |
-| 한국 교육 분류 누락 | ⏳ | 향후 추가 |
+| [데이터 누락 항목 A] | ✅ | 데이터 추가 |
+| [데이터 누락 항목 B] | ✅ | 데이터 추가 |
+| [알고리즘 이슈] | ✅ | 알고리즘 추가 |
+| [분류 누락] | ⏳ | 향후 추가 |
 
 **해결률**: 75% (3/4)
 
@@ -342,12 +346,11 @@ describe('API Performance', () => {
 
 | 메트릭 | 값 | 목표 | 결과 |
 |--------|-----|------|------|
-| 발음 커버리지 (한국) | 73.0% | >= 70% | ✅ |
-| 발음 커버리지 (일본) | 95.2% | >= 90% | ✅ |
-| 발음 커버리지 (중국) | 98.1% | >= 95% | ✅ |
-| 의미 커버리지 | 82.1% | >= 80% | ✅ |
-| 평균 신뢰도 | 92.3 | >= 85 | ✅ |
-| 품질 이슈 | 0 | <= 5 | ✅ |
+| [metric] 커버리지 (카테고리 A) | [N]% | >= [N]% | ✅ |
+| [metric] 커버리지 (카테고리 B) | [N]% | >= [N]% | ✅ |
+| 메타데이터 커버리지 | [N]% | >= [N]% | ✅ |
+| 평균 신뢰도 | [N] | >= [N] | ✅ |
+| 품질 이슈 | [N] | <= 5 | ✅ |
 
 ✅ **모든 품질 게이트 통과**
 
@@ -370,17 +373,16 @@ describe('API Performance', () => {
 ## Phase 5 변경 사항
 
 ### 데이터 개선
-- 발음 추가: 15개 문자
-- 의미 추가: 8개 문자
-- 커버리지 향상: 발음 +1.2%, 의미 +0.8%
+- 데이터 추가: [N]개 레코드
+- 커버리지 향상: [metric] +[N]%
 
 ### 알고리즘 개선
-- 두음법칙 처리 추가
-- 정확도 향상: 86.1% → 87.3% (+1.2%p)
+- [도메인 규칙] 처리 추가
+- 정확도 향상: [N]% -> [N]% (+[N]%p)
 
 ### 버그 수정
-- 발음 중복 제거: 3건
-- 의미 정규화: 5건
+- 중복 데이터 제거: [N]건
+- 데이터 정규화: [N]건
 
 ---
 
@@ -388,7 +390,7 @@ describe('API Performance', () => {
 
 ✅ **Phase 5 완료**
 
-- 도메인 전문가 점수: **92/100 (A)**
+- 도메인 전문가 점수: **[N]/100 ([등급])**
 - 모든 테스트 통과
 - 모든 품질 게이트 통과
 - 성능 목표 달성
@@ -419,6 +421,14 @@ describe('API Performance', () => {
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| 회귀 테스트 실패 | Phase 5 변경사항과 실패 테스트의 관계를 분석, 변경으로 인한 회귀인지 기존 결함인지 구분 |
+| 성능 벤치마크 미달 | `EXPLAIN ANALYZE`로 쿼리 분석, 인덱스 추가 또는 캐시 적용 |
+| Phase 4 테스트와 Phase 5 결과 불일치 | 테스트 환경(데이터, 설정) 차이 확인, 동일 환경에서 재실행 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 도메인 전문가 이슈 추적 완료
@@ -445,24 +455,3 @@ describe('API Performance', () => {
 
 ---
 
-## 💡 TriHanzi 실제 최종 QA
-
-**회귀 테스트**:
-- 총 163개 테스트 (단위 120 + E2E 28 + API 15)
-- 100% 통과율
-- 새 테스트 추가: 12개 (두음법칙, 데이터 검증)
-
-**데이터 품질**:
-| 메트릭 | Phase 4 | Phase 5 | 개선 |
-|--------|---------|---------|------|
-| 발음 (한국) | 71.8% | 73.0% | +1.2%p |
-| 의미 | 81.3% | 82.1% | +0.8%p |
-| 신뢰도 | 92.1 | 92.3 | +0.2 |
-| 품질 이슈 | 5 | 0 | -5 |
-
-**성능**:
-- Lighthouse: 92 (유지)
-- API 응답: 87ms (개선, 이전 94ms)
-- 페이지 로드: 1.8s (유지)
-
-**Phase 5 승인**: ✅ (2026-02-16)

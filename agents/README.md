@@ -94,9 +94,9 @@ Phase 6: Launch Preparation (5%)
 원시 아이디어를 한 문장으로 작성하세요:
 
 ```
-"한중일 한자를 비교하는 웹사이트를 만들고 싶어"
 "AI 기반 음식 추천 앱"
 "부동산 검색 플랫폼"
+"운동 루틴 추천 서비스"
 ```
 
 ### 2. Phase 0 시작
@@ -163,7 +163,7 @@ agent-system/
 │   └── review-report.md        # 품질 검토 보고서 템플릿
 │
 └── examples/                    # 실행 예시
-    └── trihanzi/               # TriHanzi 프로젝트 케이스 스터디
+    └── [domain]/               # 도메인별 케이스 스터디
         ├── input.txt           # 초기 아이디어
         └── execution-log.md    # 실행 과정 기록
 ```
@@ -177,9 +177,9 @@ agent-system/
 이 시스템의 11개 에이전트는 **도메인에 무관**하게 작동합니다. 오직 **Domain Expert만 동적으로 생성**되어 특정 도메인에 적응합니다.
 
 **예시**:
-- 한자 비교 프로젝트 → "Dr. Lee Hanja (Comparative Philologist)" 생성
-- 음식 추천 프로젝트 → "Chef Kim Nutrition (Nutritionist)" 생성
-- 부동산 검색 프로젝트 → "Agent Park Property (Real Estate Expert)" 생성
+- 음식 추천 프로젝트 → "Chef Kim (Nutritionist)" 생성
+- 부동산 검색 프로젝트 → "Agent Park (Real Estate Expert)" 생성
+- 운동 루틴 프로젝트 → "Coach Lee (Exercise Physiologist)" 생성
 
 ### 2. 실행 가능한 페르소나 문서
 
@@ -229,55 +229,6 @@ agent-system/
 | Phase 6 | 프로덕션 배포 성공 |
 
 ---
-
-## 💡 실제 사례: TriHanzi
-
-### 프로젝트 개요
-
-**아이디어**: "한중일 한자를 비교하는 웹사이트"
-
-**결과**:
-- **기간**: 7일
-- **커밋**: 21개
-- **데이터**: 10,000자, 40,868개 발음
-- **스크립트**: 30개 (데이터 파이프라인)
-- **컴포넌트**: 41개 React 컴포넌트
-- **API**: 8개 라우트 그룹
-- **품질**: A+ (Lighthouse 100점, Domain Expert 95점)
-
-### Phase별 산출물
-
-**Phase 0** (1일):
-- PRD: 타겟 페르소나 3개, P0-P3 기능 분류
-- Architecture: Next.js 16 + PostgreSQL + Prisma + Vercel
-- Domain Expert: "Dr. Lee Hanja - Comparative Philologist"
-
-**Phase 1** (1일):
-- DB 스키마: 6개 모델, 15개 인덱스
-- 데이터 파이프라인: Unihan, CC-CEDICT, KANJIDIC2
-- 초기 데이터: 10,000자 로드
-
-**Phase 2** (2일):
-- P0 UI: 검색, 문자 상세, 비교 테이블
-- API: `/api/characters`, `/api/search`, `/api/compare`
-
-**Phase 3** (1.5일):
-- 알고리즘: 발음 유사도, False Friends 감지
-- 발음 유추: 일본어 음독 → 한국어 한자음 (73% 정확도)
-
-**Phase 4** (1일):
-- SEO: JSON-LD, OG 이미지, Sitemap
-- i18n: 4개 언어 (en, ko, ja, zh)
-- Lighthouse: 100/100/100/100
-
-**Phase 5** (0.5일):
-- Domain Expert 검증: 95/100점 (A+)
-- 데이터 정확도: 97.3%
-- 커버리지: 82.1%
-
-**Phase 6** (0.5일):
-- 배포: Vercel (프로덕션)
-- 문서: README, API 문서, 사용 가이드
 
 ---
 
@@ -329,7 +280,7 @@ agent-system/
 
 ### ✅ 잘 작동하는 경우
 
-- **데이터 중심 앱**: 한자 비교, 음식 추천, 부동산 검색, 도서 카탈로그
+- **데이터 중심 앱**: 음식 추천, 부동산 검색, 도서 카탈로그, 제품 비교
 - **컨텐츠 플랫폼**: 블로그, 위키, 문서 사이트
 - **비교/분석 도구**: 제품 비교, 가격 비교, 성능 벤치마크
 - **검색/탐색 앱**: 레시피 검색, 여행 가이드, 학습 자료
@@ -427,10 +378,6 @@ agent-system/
 - [Domain Knowledge 템플릿](templates/domain-knowledge.md)
 - [Review Report 템플릿](templates/review-report.md)
 
-### 케이스 스터디
-
-- [TriHanzi 실행 로그](examples/trihanzi/execution-log.md) (TODO)
-
 ### 이론 배경
 
 이 시스템의 설계 원칙:
@@ -439,7 +386,6 @@ agent-system/
 2. **Phase-Gate Process**: 각 단계마다 품질 검증
 3. **Separation of Concerns**: 각 에이전트는 단일 책임
 4. **Executable Documentation**: 문서가 곧 실행 가능한 스크립트
-5. **Evidence-Based Design**: TriHanzi 프로젝트 실증 데이터 기반
 
 ---
 

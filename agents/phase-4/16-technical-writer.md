@@ -25,9 +25,8 @@ docs/
 │   ├── authentication.md   # 인증 (필요 시)
 │   ├── rate-limiting.md    # Rate limiting
 │   ├── endpoints/
-│   │   ├── characters.md   # /api/characters
+│   │   ├── [resources].md  # /api/[resources]
 │   │   ├── search.md       # /api/search
-│   │   ├── compare.md      # /api/compare
 │   │   └── ...
 │   └── examples.md         # 사용 예시
 ```
@@ -143,9 +142,9 @@ X-RateLimit-Reset: 1640000000
 각 API 엔드포인트에 대해 다음 형식으로 문서를 작성하세요:
 
 ```markdown
-# GET /api/characters
+# GET /api/[resources]
 
-한자 목록을 조회합니다.
+[Resource] 목록을 조회합니다.
 
 ## 요청
 
@@ -153,7 +152,7 @@ X-RateLimit-Reset: 1640000000
 \`GET\`
 
 ### URL
-\`/api/characters\`
+\`/api/[resources]\`
 
 ### 쿼리 파라미터
 
@@ -161,13 +160,13 @@ X-RateLimit-Reset: 1640000000
 |---------|------|------|--------|------|
 | `page` | number | ❌ | 1 | 페이지 번호 |
 | `limit` | number | ❌ | 20 | 페이지당 항목 수 (최대 100) |
-| `country` | string | ❌ | - | 국가 필터 (`KOREA`, `JAPAN`, `CHINA`) |
+| `category` | string | ❌ | - | 카테고리 필터 |
 | `search` | string | ❌ | - | 검색 키워드 |
 
 ### 예시 요청
 
 \`\`\`bash
-curl -X GET "https://example.com/api/characters?page=1&limit=10&country=KOREA"
+curl -X GET "https://example.com/api/[resources]?page=1&limit=10&category=[category]"
 \`\`\`
 
 ## 응답
@@ -178,24 +177,20 @@ curl -X GET "https://example.com/api/characters?page=1&limit=10&country=KOREA"
 {
   "success": true,
   "data": {
-    "characters": [
+    "items": [
       {
         "id": "clx123456",
-        "char": "愛",
-        "unicode": "U+611B",
-        "meanings": ["love", "affection"],
-        "pronunciations": {
-          "korea": ["애", "ai"],
-          "japan": ["あい", "ai"],
-          "china": ["ài"]
-        }
+        "name": "[Resource Name]",
+        "description": "[Resource description]",
+        "category": "[category]",
+        "metadata": { }
       }
     ],
     "pagination": {
       "page": 1,
       "limit": 10,
-      "total": 10000,
-      "totalPages": 1000
+      "total": 1000,
+      "totalPages": 100
     }
   }
 }
@@ -210,7 +205,7 @@ curl -X GET "https://example.com/api/characters?page=1&limit=10&country=KOREA"
   "success": false,
   "error": {
     "code": "INVALID_INPUT",
-    "message": "Invalid country parameter. Must be one of: KOREA, JAPAN, CHINA"
+    "message": "Invalid category parameter."
   }
 }
 \`\`\`
@@ -231,42 +226,40 @@ curl -X GET "https://example.com/api/characters?page=1&limit=10&country=KOREA"
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| `id` | string | 문자 고유 ID |
-| `char` | string | 한자 문자 |
-| `unicode` | string | Unicode 코드포인트 |
-| `meanings` | string[] | 의미 배열 |
-| `pronunciations.korea` | string[] | 한국어 발음 |
-| `pronunciations.japan` | string[] | 일본어 발음 |
-| `pronunciations.china` | string[] | 중국어 발음 |
+| `id` | string | 리소스 고유 ID |
+| `name` | string | 리소스 이름 |
+| `description` | string | 리소스 설명 |
+| `category` | string | 카테고리 |
+| `metadata` | object | 도메인별 메타데이터 |
 
 ## 예시 코드
 
 ### JavaScript (fetch)
 
 \`\`\`javascript
-async function getCharacters(page = 1, country = null) {
+async function getResources(page = 1, category = null) {
   const params = new URLSearchParams({
     page: page.toString(),
     limit: '20',
   });
 
-  if (country) {
-    params.append('country', country);
+  if (category) {
+    params.append('category', category);
   }
 
-  const response = await fetch(`https://example.com/api/characters?${params}`);
+  const response = await fetch(`https://example.com/api/[resources]?${params}`);
   const data = await response.json();
 
   if (data.success) {
-    return data.data.characters;
+    return data.data.items;
   } else {
     throw new Error(data.error.message);
   }
 }
 
 // 사용 예시
-const characters = await getCharacters(1, 'KOREA');
-console.log(characters);
+const items = await getResources(1, '[category]');
+console.log(items);
 \`\`\`
 
 ### Python (requests)
@@ -274,59 +267,65 @@ console.log(characters);
 \`\`\`python
 import requests
 
-def get_characters(page=1, country=None):
+def get_resources(page=1, category=None):
     params = {
         'page': page,
         'limit': 20,
     }
 
-    if country:
-        params['country'] = country
+    if category:
+        params['category'] = category
 
     response = requests.get(
-        'https://example.com/api/characters',
+        'https://example.com/api/[resources]',
         params=params
     )
 
     data = response.json()
 
     if data['success']:
-        return data['data']['characters']
+        return data['data']['items']
     else:
         raise Exception(data['error']['message'])
 
 # 사용 예시
-characters = get_characters(page=1, country='KOREA')
-print(characters)
+items = get_resources(page=1, category='[category]')
+print(items)
 \`\`\`
 
 ### cURL
 
 \`\`\`bash
 # 기본 요청
-curl -X GET "https://example.com/api/characters"
+curl -X GET "https://example.com/api/[resources]"
 
 # 필터링
-curl -X GET "https://example.com/api/characters?country=KOREA&page=2"
+curl -X GET "https://example.com/api/[resources]?category=[category]&page=2"
 
 # 검색
-curl -X GET "https://example.com/api/characters?search=love"
+curl -X GET "https://example.com/api/[resources]?search=keyword"
 \`\`\`
 
 ## 참고 사항
 
-- 검색은 의미(meanings) 필드에서 부분 일치 검색을 수행합니다
-- 페이지 번호는 1부터 시작합니다
-- `limit`은 최대 100까지 설정 가능합니다
+- 검색은 주요 텍스트 필드에서 부분 일치 검색을 수행한다
+- 페이지 번호는 1부터 시작한다
+- `limit`은 최대 100까지 설정 가능하다
 ```
 
 **각 엔드포인트에 대해 반복**:
-- `/api/characters`
-- `/api/characters/[id]`
+- `/api/[resources]`
+- `/api/[resources]/[id]`
 - `/api/search`
-- `/api/compare`
-- `/api/false-friends`
-- 기타 모든 API
+- `src/app/api/` 디렉토리의 모든 public 라우트를 문서화한다. `_internal/` 접두사가 붙은 라우트는 제외한다.
+
+모든 코드 예시에 에러 처리를 포함한다:
+```javascript
+// JavaScript 예시
+const response = await fetch('/api/[resources]?q=keyword');
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+const data = await response.json();
+```
 
 **체크리스트**:
 - [ ] 모든 엔드포인트 문서화
@@ -342,68 +341,43 @@ curl -X GET "https://example.com/api/characters?search=love"
 ```markdown
 # API 사용 예시
 
-## 시나리오 1: 한자 검색 및 상세 정보 조회
+## 시나리오 1: 검색 및 상세 정보 조회
 
 ### 1단계: 검색
 
 \`\`\`javascript
-const response = await fetch('https://example.com/api/search?q=love');
+const response = await fetch('https://example.com/api/search?q=keyword');
 const data = await response.json();
 
-const firstCharacter = data.data.characters[0];
-console.log(firstCharacter); // { id: "...", char: "愛", ... }
+const firstItem = data.data.items[0];
+console.log(firstItem); // { id: "...", name: "[Resource]", ... }
 \`\`\`
 
 ### 2단계: 상세 정보 조회
 
 \`\`\`javascript
-const detailResponse = await fetch(`https://example.com/api/characters/${firstCharacter.id}`);
+const detailResponse = await fetch(`https://example.com/api/[resources]/${firstItem.id}`);
 const detailData = await detailResponse.json();
 
 console.log(detailData.data);
 // {
-//   character: { ... },
-//   pronunciations: [ ... ],
-//   meanings: [ ... ],
-//   variants: [ ... ]
+//   item: { ... },
+//   details: [ ... ],
+//   related: [ ... ]
 // }
 \`\`\`
 
-## 시나리오 2: 한자 비교
+## 시나리오 2: 필터링된 목록 조회
 
 \`\`\`javascript
-const compareResponse = await fetch(
-  'https://example.com/api/compare?chars=愛,恋'
+const filteredResponse = await fetch(
+  'https://example.com/api/[resources]?category=[category]&page=1'
 );
-const compareData = await compareResponse.json();
+const filteredData = await filteredResponse.json();
 
-console.log(compareData.data.comparison);
-// {
-//   characters: [ ... ],
-//   similarities: {
-//     visual: 75.2,
-//     meaning: 82.5,
-//   },
-//   isFalseFriend: false
-// }
-\`\`\`
-
-## 시나리오 3: False Friends 조회
-
-\`\`\`javascript
-const falseFriendsResponse = await fetch(
-  'https://example.com/api/false-friends?page=1'
-);
-const falseFriendsData = await falseFriendsResponse.json();
-
-console.log(falseFriendsData.data.falseFriends);
+console.log(filteredData.data.items);
 // [
-//   {
-//     char1: "手",
-//     char2: "毛",
-//     visualSimilarity: 85.2,
-//     meaningSimilarity: 12.3
-//   },
+//   { id: "...", name: "[Resource]", category: "[category]" },
 //   ...
 // ]
 \`\`\`
@@ -436,10 +410,9 @@ npx swagger-jsdoc -d swaggerDef.js src/app/api/**/*.ts -o docs/api/openapi.yaml
 1. **API 문서**:
    - `docs/api/README.md`
    - `docs/api/rate-limiting.md`
-   - `docs/api/endpoints/characters.md`
+   - `docs/api/endpoints/[resources].md`
    - `docs/api/endpoints/search.md`
-   - `docs/api/endpoints/compare.md`
-   - `docs/api/endpoints/false-friends.md`
+   - 프로젝트 API 라우트별 추가 문서
    - `docs/api/examples.md`
 
 2. **OpenAPI 스키마** (선택):
@@ -447,10 +420,18 @@ npx swagger-jsdoc -d swaggerDef.js src/app/api/**/*.ts -o docs/api/openapi.yaml
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| API 응답 예시와 실제 응답 불일치 | 실제 API를 호출하여 응답을 캡처, 문서에 반영 |
+| 링크 깨짐 | `npx markdown-link-check docs/` 실행하여 깨진 링크 수정 |
+| 코드 예시 실행 실패 | 각 예시를 실제로 실행하여 검증. 실패 시 수정 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] API 개요 문서 작성
-- [ ] 모든 엔드포인트 문서화 (8개 이상)
+- [ ] 모든 엔드포인트 문서화
 - [ ] 요청/응답 예시 포함
 - [ ] 예시 코드 작성 (JavaScript, Python, cURL)
 - [ ] 사용 시나리오 3-5개 작성
@@ -472,69 +453,3 @@ npx swagger-jsdoc -d swaggerDef.js src/app/api/**/*.ts -o docs/api/openapi.yaml
 
 ---
 
-## 💡 TriHanzi 실제 API 문서
-
-**API 엔드포인트** (8개):
-
-### 1. `/api/characters`
-- **Method**: GET
-- **설명**: 한자 목록 조회
-- **쿼리**: `page`, `limit`, `country`, `search`
-- **응답**: 페이지네이션된 문자 목록
-
-### 2. `/api/characters/[id]`
-- **Method**: GET
-- **설명**: 한자 상세 정보
-- **응답**: 문자, 발음, 의미, 변형
-
-### 3. `/api/characters/[id]/analysis`
-- **Method**: GET
-- **설명**: 한자 분석 (유사 문자, 통계)
-- **응답**: 분석 데이터
-
-### 4. `/api/characters/[id]/similar`
-- **Method**: GET
-- **설명**: 유사 문자 조회
-- **응답**: 유사도 기반 정렬
-
-### 5. `/api/characters/autocomplete`
-- **Method**: GET
-- **설명**: 자동완성
-- **쿼리**: `q`
-- **응답**: 최대 10개 제안
-
-### 6. `/api/search`
-- **Method**: GET
-- **설명**: 통합 검색
-- **쿼리**: `q`, `filters`, `page`
-- **응답**: 검색 결과
-
-### 7. `/api/compare`
-- **Method**: GET
-- **설명**: 한자 비교
-- **쿼리**: `chars` (쉼표 구분)
-- **응답**: 비교 메타데이터
-
-### 8. `/api/false-friends`
-- **Method**: GET
-- **설명**: False Friends 목록
-- **쿼리**: `page`, `limit`
-- **응답**: False Friends 쌍
-
-**문서 구조**:
-```
-docs/api/
-├── README.md (API 개요)
-├── endpoints/
-│   ├── characters.md
-│   ├── search.md
-│   ├── compare.md
-│   └── false-friends.md
-└── examples.md (사용 예시)
-```
-
-**예시 코드**:
-- JavaScript (fetch)
-- Python (requests)
-- cURL
-- Next.js (server component)

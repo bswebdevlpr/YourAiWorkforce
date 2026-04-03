@@ -17,40 +17,37 @@
 ### Step 1: README.md 최종 업데이트 (30-45분)
 
 ```markdown
-# TriHanzi - CJK Character Comparison Platform
+# [project-name]
 
-한중일 한자를 비교하고 학습하는 인터랙티브 웹 플랫폼
+[프로젝트 한 줄 설명]
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
-[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black)](https://trihanzi.com)
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black)](https://[your-domain.com])
 
 ---
 
-## 🌟 주요 기능
+## 주요 기능
 
-- 🔍 **한자 검색** - 10,000+ 한자 데이터베이스에서 실시간 검색
-- 🌐 **3개국 비교** - 한국, 일본, 중국의 한자 비교
-- 🎓 **교육 레벨** - HSK (중국), JLPT (일본) 레벨 표시
-- ⚠️ **False Friends** - 형태는 유사하나 의미가 다른 662개 한자 쌍
-- 🎨 **다크 모드** - 눈의 피로를 줄이는 다크 모드 지원
-- 🌏 **4개 언어** - 한국어, 영어, 일본어, 중국어 지원
+- [feature 1]
+- [feature 2]
+- [feature 3]
 
 ---
 
-## 📊 프로젝트 통계
+## 프로젝트 통계
 
 | 메트릭 | 값 |
 |--------|-----|
-| 총 한자 | 10,000자 |
-| 발음 데이터 | 40,868개 |
-| 의미 데이터 | 26,832개 |
-| False Friends | 662쌍 |
-| 코드베이스 | 15,234 줄 |
-| 컴포넌트 | 41개 |
-| API 엔드포인트 | 8개 |
-| 지원 언어 | 4개 |
+| 총 레코드 | [N] |
+
+> 위 통계 수치는 `npm run generate-readme-stats` 또는 Prisma 쿼리로 최신 값을 조회하여 기입한다. 하드코딩된 수치는 배포 시 불일치할 수 있다.
+
+| 코드베이스 | [N] 줄 |
+| 컴포넌트 | [N]개 |
+| API 엔드포인트 | [N]개 |
+| 지원 언어 | [N]개 |
 
 ---
 
@@ -67,8 +64,8 @@
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/yourusername/trihanzi.git
-cd trihanzi
+git clone https://github.com/[username]/[project-name].git
+cd [project-name]
 
 # 2. 의존성 설치
 pnpm install
@@ -116,60 +113,54 @@ pnpm dev
 ## 📁 프로젝트 구조
 
 ```
-trihanzi/
+[project-name]/
 ├── src/
 │   ├── app/
-│   │   ├── [locale]/          # 로케일별 페이지
-│   │   │   ├── page.tsx        # 홈페이지
-│   │   │   ├── search/         # 검색 페이지
-│   │   │   ├── compare/        # 비교 페이지
-│   │   │   └── characters/[id]/ # 문자 상세
-│   │   └── api/                # API 라우트
-│   │       ├── characters/
-│   │       ├── search/
-│   │       └── compare/
-│   ├── components/             # React 컴포넌트
-│   │   ├── ui/                 # UI 프리미티브
-│   │   ├── character/          # 문자 관련
-│   │   ├── search/             # 검색 관련
-│   │   └── compare/            # 비교 관련
+│   │   ├── [locale]/            # 로케일별 페이지
+│   │   │   ├── page.tsx          # 홈페이지
+│   │   │   ├── search/           # 검색 페이지
+│   │   │   └── [resources]/[id]/ # [Resource] 상세
+│   │   └── api/                  # API 라우트
+│   │       ├── [resources]/
+│   │       └── search/
+│   ├── components/               # React 컴포넌트
+│   │   ├── ui/                   # UI 프리미티브
+│   │   ├── [domain]/             # 도메인 관련
+│   │   └── search/               # 검색 관련
 │   ├── lib/
-│   │   ├── algorithms/         # 도메인 알고리즘
-│   │   ├── services/           # 비즈니스 로직
-│   │   ├── db/                 # 데이터베이스 클라이언트
-│   │   └── cache/              # 캐시 유틸리티
+│   │   ├── algorithms/           # 도메인 알고리즘
+│   │   ├── services/             # 비즈니스 로직
+│   │   ├── db/                   # 데이터베이스 클라이언트
+│   │   └── cache/                # 캐시 유틸리티
 │   ├── i18n/
-│   │   └── locales/            # 번역 파일
-│   └── constants/              # 상수 및 설정
+│   │   └── locales/              # 번역 파일
+│   └── constants/                # 상수 및 설정
 ├── prisma/
-│   ├── schema.prisma           # 데이터베이스 스키마
-│   └── migrations/             # 마이그레이션
+│   ├── schema.prisma             # 데이터베이스 스키마
+│   └── migrations/               # 마이그레이션
 ├── scripts/
-│   ├── migration/              # 데이터 마이그레이션
-│   ├── enrichment/             # 데이터 보강
-│   ├── pronunciation/          # 발음 처리
-│   └── reporting/              # 통계 및 보고
+│   ├── migration/                # 데이터 마이그레이션
+│   ├── enrichment/               # 데이터 보강
+│   └── reporting/                # 통계 및 보고
 ├── test/
-│   ├── e2e/                    # E2E 테스트
-│   └── integration/            # 통합 테스트
+│   ├── e2e/                      # E2E 테스트
+│   └── integration/              # 통합 테스트
 └── docs/
-    ├── api/                    # API 문서
-    ├── design/                 # 디자인 시스템
-    ├── reports/                # 품질 보고서
-    └── personas/               # 도메인 전문가
+    ├── api/                      # API 문서
+    ├── design/                   # 디자인 시스템
+    ├── reports/                  # 품질 보고서
+    └── personas/                 # 도메인 전문가
 
 ```
 
 ---
 
-## 🗄️ 데이터 소스
+## 데이터 소스
 
 | 소스 | 설명 | 항목 수 | 라이선스 |
 |------|------|---------|---------|
-| **Unihan Database** | Unicode 한자 데이터베이스 | 10,000자 | Public Domain |
-| **CC-CEDICT** | 중국어-영어 사전 | 124,259 항목 | CC BY-SA 4.0 |
-| **KANJIDIC2** | 일본 한자 사전 | 13,108자 | CC BY-SA 3.0 |
-| **한국어문회** | 한국 한자 데이터 | 8,000자 | Open Data |
+| **[Data Source 1]** | [설명] | [N] | [라이선스] |
+| **[Data Source 2]** | [설명] | [N] | [라이선스] |
 
 ---
 
@@ -216,42 +207,41 @@ pnpm start
 - [API 문서](docs/api/README.md)
 - [디자인 시스템](docs/design/README.md)
 - [스크립트 가이드](scripts/README.md)
-- [도메인 전문가 페르소나](docs/personas/hanzi-expert.md)
+- [도메인 전문가 페르소나](docs/personas/[domain]-expert.md)
 
 ---
 
 ## 🛣️ 로드맵
 
-### ✅ Phase 0-2 (완료)
+### Phase 0-2 (완료)
 - [x] 기본 아키텍처 수립
 - [x] 데이터베이스 설계 및 구축
-- [x] P0 기능 구현 (검색, 상세, 기본 UI)
+- [x] P0 기능 구현
 
-### ✅ Phase 3 (완료)
-- [x] 도메인 특화 알고리즘 (발음 유추, False Friends)
+### Phase 3 (완료)
+- [x] 도메인 특화 알고리즘
 - [x] 디자인 시스템 구축
-- [x] P1 기능 구현 (비교, 컬렉션)
+- [x] P1 기능 구현
 
-### ✅ Phase 4 (완료)
-- [x] SEO 최적화 (Lighthouse 100점)
+### Phase 4 (완료)
+- [x] SEO 최적화
 - [x] 성능 최적화
-- [x] 보안 강화 (rate limiting, 헤더)
+- [x] 보안 강화
 
-### ✅ Phase 5 (완료)
-- [x] 도메인 전문가 리뷰 (A 등급 달성)
+### Phase 5 (완료)
+- [x] 도메인 전문가 리뷰
 - [x] 데이터 품질 개선
 - [x] 최종 QA
 
-### ✅ Phase 6 (현재)
+### Phase 6 (현재)
 - [x] 문서 완성
 - [ ] 프로덕션 배포
 - [ ] 모니터링 설정
 
-### 🚧 향후 계획 (Phase 7+)
-- [ ] 발음 오디오 추가
-- [ ] 사용자 계정 및 학습 진도 추적
-- [ ] 플래시카드 생성 기능
-- [ ] 모바일 앱 (React Native)
+### 향후 계획 (Phase 7+)
+- [ ] [향후 기능 1]
+- [ ] [향후 기능 2]
+- [ ] [향후 기능 3]
 
 ---
 
@@ -270,8 +260,8 @@ pnpm start
 
 ## 📞 연락처
 
-- **이메일**: contact@trihanzi.com
-- **이슈**: [GitHub Issues](https://github.com/yourusername/trihanzi/issues)
+- **이메일**: contact@[your-domain.com]
+- **이슈**: [GitHub Issues](https://github.com/[username]/[project-name]/issues)
 
 ---
 
@@ -288,6 +278,7 @@ Last updated: 2026-02-16
 - [ ] 데이터 소스 및 라이선스 명시
 - [ ] 로드맵 업데이트 (완료/진행/계획)
 - [ ] 모든 링크 작동 확인
+- [ ] 모든 링크 작동 확인: `npx markdown-link-check README.md docs/**/*.md`
 
 ---
 
@@ -314,9 +305,8 @@ find . -name "*.md" -exec markdown-link-check {} \;
 ## 문서 일관성 체크리스트
 
 ### 용어 일관성
-- [ ] "한자" vs "漢字" - 일관되게 사용
-- [ ] "False Friends" vs "거짓 친구" - 영문 문서는 False Friends
-- [ ] API 엔드포인트 표기 (/api/characters vs /api/character)
+- [ ] 도메인 용어 일관되게 사용
+- [ ] API 엔드포인트 표기 일관성 (/api/[resources] 단수 vs 복수)
 
 ### 메트릭 일관성
 - [ ] README.md 통계
@@ -346,7 +336,7 @@ find . -name "*.md" -exec markdown-link-check {} \;
 ```markdown
 # 기여 가이드
 
-TriHanzi에 기여해주셔서 감사합니다! 🙏
+[project-name]에 기여해주셔서 감사합니다!
 
 ---
 
@@ -354,7 +344,7 @@ TriHanzi에 기여해주셔서 감사합니다! 🙏
 
 ### 1. 이슈 생성
 
-버그 리포트나 기능 제안은 [GitHub Issues](https://github.com/yourusername/trihanzi/issues)에서 생성하세요.
+버그 리포트나 기능 제안은 [GitHub Issues](https://github.com/[username]/[project-name]/issues)에서 생성하세요.
 
 **버그 리포트 템플릿**:
 - 예상 동작
@@ -403,9 +393,9 @@ TriHanzi에 기여해주셔서 감사합니다! 🙏
 
 **예시**:
 ```
-feat: 발음 오디오 재생 기능 추가
+feat: [feature] 기능 추가
 
-사용자가 발음 버튼을 클릭하면 해당 한자의 발음을 오디오로 재생합니다.
+[기능 설명]
 ```
 
 ---
@@ -439,7 +429,7 @@ pnpm lint
 
 ## 질문?
 
-궁금한 점이 있으면 [GitHub Discussions](https://github.com/yourusername/trihanzi/discussions)에 질문하세요.
+궁금한 점이 있으면 [GitHub Discussions](https://github.com/[username]/[project-name]/discussions)에 질문하세요.
 ```
 
 **체크리스트**:
@@ -488,9 +478,9 @@ SOFTWARE.
 - [x] CONTRIBUTING.md (생성)
 - [x] LICENSE (생성)
 - [x] .env.example (실제 값 제거)
-- [x] docs/api/README.md (API 개요)
-- [x] docs/design/README.md (디자인 시스템)
-- [x] scripts/README.md (스크립트 가이드)
+- [ ] docs/api/README.md (API 개요)
+- [ ] docs/design/README.md (디자인 시스템)
+- [ ] scripts/README.md (스크립트 가이드)
 
 ## 품질 체크
 - [x] 모든 링크 작동
@@ -523,6 +513,14 @@ SOFTWARE.
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| 문서 내 링크 깨짐 | `markdown-link-check`로 깨진 링크 목록 확인, 경로 수정 또는 삭제 |
+| README 통계 수치 불일치 | DB 쿼리로 실제 수치 확인 후 업데이트 |
+| CONTRIBUTING.md 절차와 실제 CI 불일치 | GitHub Actions 워크플로우와 대조하여 절차 수정 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] README.md 최종 업데이트
@@ -548,38 +546,3 @@ SOFTWARE.
 
 ---
 
-## 💡 TriHanzi 실제 문서
-
-**문서 구조**:
-```
-trihanzi/
-├── README.md (238줄)
-├── CONTRIBUTING.md (생성)
-├── LICENSE (MIT)
-├── docs/
-│   ├── api/
-│   │   ├── README.md (API 개요)
-│   │   └── endpoints/ (8개 파일)
-│   ├── design/
-│   │   ├── README.md
-│   │   ├── styles.md
-│   │   └── components.md
-│   ├── reports/
-│   │   ├── PROJECT-REPORT.md
-│   │   ├── domain-expert-review.md
-│   │   └── tech-lead-review.md
-│   └── personas/
-│       └── hanzi-expert.md (412줄)
-└── scripts/
-    └── README.md (333줄)
-```
-
-**메트릭 (README.md)**:
-- 총 한자: 10,000자
-- 발음: 40,868개
-- 의미: 26,832개
-- False Friends: 662쌍
-- 코드: 15,234줄
-- 컴포넌트: 41개
-- API: 8개
-- 언어: 4개

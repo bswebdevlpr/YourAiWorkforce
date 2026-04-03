@@ -8,7 +8,7 @@
 
 - ✅ **필수**: `docs/personas/[domain]-expert.md`
 - ✅ **필수**: `docs/specs/prd.md`
-- ✅ **필수**: 데이터베이스 (Phase 1에서 로드한 1차 데이터)
+- ✅ **필수**: 데이터베이스 — Phase 1 Data Engineer가 로드한 1차 데이터. 스키마는 `prisma/schema.prisma` 참조.
 - ✅ **필수**: `scripts/migration/` (Phase 1 스크립트)
 
 ---
@@ -99,6 +99,7 @@ async function enrichFromSource2() {
   console.log('🔄 데이터 보강: Source 2');
 
   // 2차 소스 읽기
+  // 2차 데이터 소스의 위치와 포맷은 Domain Expert 문서(`docs/personas/[domain]-expert.md`)의 "데이터 소스" 섹션에 정의되어 있다. 해당 섹션을 참조하여 경로를 결정한다.
   const rawData = fs.readFileSync('data/raw/source2.json', 'utf-8');
   const source2Data = JSON.parse(rawData);
 
@@ -386,6 +387,14 @@ async function finalQualityReport() {
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| 보강 성공률 < 50% | 보강 중단, 2차 소스 품질 확인. Domain Expert에게 대체 소스 요청 |
+| 보강 스크립트 중간 실패 | `upsert` 사용으로 재실행 안전. 오류 레코드만 `data/errors/`에 분리 |
+| 보강 후 기존 데이터 품질 저하 | 보강 전 스냅샷과 비교, 저하 항목은 롤백 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 데이터 품질 초기 분석 완료
@@ -411,18 +420,3 @@ async function finalQualityReport() {
 "agent-system/agents/phase-2/10-qa-lead.md를 읽고 QLA로 작동해주세요"
 ```
 
----
-
-## 💡 TriHanzi 실제 데이터 보강
-
-**보강 스크립트** (11개):
-- `infer-korean-from-japanese.ts` - 일본어 음독 → 한국어 발음 유추 (73% 정확도)
-- `translate-to-korean.ts` - 중국어 의미 → 한국어 번역
-- `update-korean-romanization.ts` - 한국어 로마자 표기 추가
-- `update-english-from-unihan.ts` - 영어 의미 보강
-- `compute-comparison-metadata.ts` - 비교 메타데이터 생성
-
-**결과**:
-- 발음 커버리지: 51.4% → 73.0% (21.6%p 향상)
-- 의미 커버리지: 68.2% → 82.1% (13.9%p 향상)
-- 완전성: 97.3%

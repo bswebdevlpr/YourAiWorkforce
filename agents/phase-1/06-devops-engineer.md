@@ -57,11 +57,6 @@ const nextConfig: NextConfig = {
 export default withNextIntl(nextConfig);
 ```
 
-**TriHanzi 실제 설정** (`next.config.ts`, 30줄):
-- next-intl 플러그인 (4개 언어)
-- TypeScript/ESLint strict 모드
-- 보안 헤더 설정
-
 #### Tailwind CSS 설정
 
 **파일 위치**: `tailwind.config.ts`
@@ -331,7 +326,8 @@ NODE_ENV="development"
 import { z } from 'zod';
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().url(),
+  // SQLite 사용 시 file: 프로토콜을 허용해야 함
+  DATABASE_URL: z.string().min(1), // .url() 대신 .min(1) 사용 — SQLite file: 경로 호환
   NODE_ENV: z.enum(['development', 'production', 'test']),
   NEXT_PUBLIC_APP_URL: z.string().url(),
 
@@ -417,11 +413,19 @@ import '@testing-library/jest-dom';
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| `pnpm install` 의존성 충돌 | `pnpm install --force` 시도. 지속 시 충돌 패키지를 architecture.md 기준으로 버전 고정 |
+| ESLint/Prettier 설정 충돌 | Prettier를 우선하고 ESLint 규칙을 `off`로 조정 |
+| 환경변수 검증 실패 | `.env.example`과 대조하여 누락 변수 추가. 선택 변수는 `z.string().optional()` 처리 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 모든 설정 파일 생성 완료
 - [ ] `pnpm dev` 실행 성공
-- [ ] `pnpm build` 실행 성공 (TypeScript 에러 0개)
+- [ ] `pnpm build` 실행 성공 (TypeScript 에러 0개). 단, Phase 1 시점에서는 API 라우트가 최소한이므로 빌드 경고(warning)는 허용한다.
 - [ ] `pnpm lint` 실행 성공 (ESLint 에러 0개)
 - [ ] Pre-commit hook 작동 확인 (테스트 커밋)
 - [ ] `.env` 파일이 `.gitignore`에 있는지 확인
@@ -452,85 +456,7 @@ import '@testing-library/jest-dom';
 
 ---
 
-## 💡 TriHanzi 실제 DevOps 설정
-
-### 빌드 설정 파일들
-
-1. **`next.config.ts` (30줄)**:
-   - next-intl 플러그인 (4개 언어)
-   - TypeScript/ESLint strict 모드
-   - 보안 헤더 (`poweredByHeader: false`)
-
-2. **`tailwind.config.ts` (38줄)**:
-   - 커스텀 색상 (한국-빨강, 일본-남색, 중국-금색)
-   - 다크 모드 지원 (`darkMode: 'class'`)
-
-3. **`tsconfig.json` (29줄)**:
-   - Strict 모드 전체 활성화
-   - Path alias: `@/*` → `./src/*`
-
-4. **`eslint.config.mjs` (42줄)**:
-   - Next.js + TypeScript 규칙
-   - `no-console` 경고
-   - 미사용 변수 에러
-
-5. **`.husky/pre-commit`**:
-   - lint-staged로 자동 lint + format
-
-### 환경 변수 (`.env.example`)
-
-```bash
-DATABASE_URL="postgresql://..."
-UPSTASH_REDIS_REST_URL="https://..."
-UPSTASH_REDIS_REST_TOKEN="..."
-NEXT_PUBLIC_APP_URL="https://trihanzi.vercel.app"
-```
-
-### 환경 검증 (`src/lib/env.ts`, 25줄)
-
-```typescript
-import { z } from 'zod';
-
-const envSchema = z.object({
-  DATABASE_URL: z.string().url(),
-  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
-  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
-});
-
-export const env = envSchema.parse(process.env);
-```
-
-### 테스트 설정 (`vitest.config.ts`)
-
-```typescript
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    environment: 'jsdom',
-    globals: true,
-  },
-});
-```
-
-### Package.json Scripts
-
-```json
-{
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint src/",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "test": "vitest",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio"
-  }
-}
-```
-
-### 핵심 설계 결정
+## 💡 핵심 설계 결정
 
 **ADR-004: TypeScript Strict 모드**
 - 이유: 타입 에러 조기 발견, 런타임 버그 방지

@@ -11,12 +11,6 @@
 한 문장으로 아이디어를 작성하세요:
 
 ```
-"한중일 한자를 비교하는 웹사이트를 만들고 싶어"
-```
-
-또는:
-
-```
 "AI 기반 음식 추천 앱"
 "부동산 검색 플랫폼"
 "운동 루틴 추천 서비스"
@@ -40,7 +34,7 @@ Product Discovery Agent로 작동해주세요.
 agent-system/agents/phase-0/01-product-discovery.md를 읽고
 Product Discovery Agent로 작동해주세요.
 
-아이디어: 한중일 한자를 비교하는 웹사이트를 만들고 싶어
+아이디어: AI 기반 음식 추천 앱을 만들고 싶어
 ```
 
 ---
@@ -169,7 +163,7 @@ git commit -m "feat: Product Requirements Document (Phase 0)"
 
 - [전체 문서](README.md) - 시스템 전체 개요 및 이론
 - [템플릿 디렉토리](templates/) - PRD, Architecture 등 템플릿
-- [TriHanzi 케이스 스터디](examples/trihanzi/) - 실제 실행 예시
+- [케이스 스터디](examples/) - 도메인별 실행 예시
 
 ---
 
@@ -189,7 +183,7 @@ git commit -m "feat: Product Requirements Document (Phase 0)"
 
 ### Q: 내 도메인에 맞는 에이전트가 없다면?
 
-**A**: Domain Expert Generator가 자동으로 도메인 전문가를 생성합니다. 한자, 음식, 부동산 등 어떤 도메인이든 작동합니다.
+**A**: Domain Expert Generator가 자동으로 도메인 전문가를 생성합니다. 음식, 부동산, 운동 등 어떤 도메인이든 작동합니다.
 
 ---
 

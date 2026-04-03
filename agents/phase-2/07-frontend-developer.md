@@ -11,9 +11,16 @@
 - ✅ **필수**: `src/app/api/*` (Backend Developer의 API 엔드포인트)
 - ⚠️ **참고**: `docs/personas/[domain]-expert.md`
 
+**API 미완성 시 대응**: Backend API가 아직 완료되지 않은 경우, 다음 전략을 사용한다:
+- `src/mocks/[resource].ts`에 목업 데이터를 정의한다
+- 환경변수 `NEXT_PUBLIC_USE_MOCK=true`일 때 목업을 사용하도록 분기한다
+- Backend 완료 후 목업 분기를 제거한다
+
 ---
 
 ## 🔨 작업 Step-by-Step
+
+> **범위 정의**: "모든 페이지"는 PRD P0 기능에 해당하는 사용자 대면 페이지를 의미한다. API 라우트, 관리자 페이지, 에러 페이지는 제외한다.
 
 ### Step 1: P0 기능 UI 분석 (15분)
 
@@ -27,11 +34,6 @@ PRD의 P0 기능을 읽고 필요한 페이지/컴포넌트를 식별하세요.
 | 목록 조회 | `/` 또는 `/browse` | ItemList, ItemCard, Pagination |
 | 상세 보기 | `/[resource]/[id]` | DetailView, InfoTable, RelatedItems |
 | 비교 | `/compare` | ComparisonTable, ComparisonControls |
-
-**TriHanzi 예시**:
-- P0-1 "한자 정보 표시" → `/character/[id]` 페이지 + CharacterCard 컴포넌트
-- P0-2 "검색" → `/search` 페이지 + SearchBar, SearchResults 컴포넌트
-- P0-3 "3개국 발음 표시" → PronunciationTable 컴포넌트
 
 **체크리스트**:
 - [ ] 모든 P0 기능에 대해 필요한 페이지 식별
@@ -244,36 +246,32 @@ P0 기능에 필요한 도메인 특화 컴포넌트를 구현하세요.
 3. **타입 안전성**: TypeScript 인터페이스로 Props 정의
 4. **접근성**: ARIA 레이블, 키보드 네비게이션 지원
 
-**TriHanzi 예시 - CharacterCard**:
+**도메인 특화 컴포넌트 예시 - [Resource]Card**:
 
 ```typescript
-// src/components/character/CharacterCard.tsx
-import { Character, Pronunciation } from '@prisma/client';
-import { CountryBadge } from '@/components/ui/CountryBadge';
+// src/components/[domain]/[Resource]Card.tsx
+import { [Resource] } from '@prisma/client';
+import { Badge } from '@/components/ui/Badge';
 
-interface CharacterCardProps {
-  character: Character & {
-    pronunciations: Pronunciation[];
+interface [Resource]CardProps {
+  item: [Resource] & {
+    relatedData: RelatedData[];
   };
-  showPronunciations?: boolean;
+  showDetails?: boolean;
 }
 
-export function CharacterCard({ character, showPronunciations = true }: CharacterCardProps) {
+export function [Resource]Card({ item, showDetails = true }: [Resource]CardProps) {
   return (
     <div className="border rounded-lg p-6 hover:shadow-lg transition-shadow">
-      <div className="text-6xl font-serif text-center mb-4">
-        {character.character}
-      </div>
+      <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
+      <p className="text-gray-600 mb-4">{item.description}</p>
 
-      {showPronunciations && (
+      {showDetails && (
         <div className="space-y-2">
-          {character.pronunciations.map((p) => (
-            <div key={p.id} className="flex items-center gap-2">
-              <CountryBadge country={p.country} />
-              <span className="text-lg">{p.value}</span>
-              {p.romanization && (
-                <span className="text-sm text-gray-500">({p.romanization})</span>
-              )}
+          {item.relatedData.map((r) => (
+            <div key={r.id} className="flex items-center gap-2">
+              <Badge variant="info">{r.type}</Badge>
+              <span className="text-sm">{r.value}</span>
             </div>
           ))}
         </div>
@@ -449,6 +447,14 @@ export interface SearchResult {
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| API 응답 형식 불일치 | TypeScript 타입을 API 응답에 맞게 수정, Backend Developer에게 스키마 확인 요청 |
+| `pnpm build` 타입 에러 | `// @ts-expect-error` 임시 사용 금지. 타입을 정확히 수정한다 |
+| 컴포넌트 렌더링 에러 | React DevTools로 props 확인, 서버/클라이언트 컴포넌트 경계 점검 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 모든 P0 페이지 라우트 생성 (최소 3개)
@@ -477,34 +483,3 @@ Frontend P0 UI를 완료했다면:
 
 Backend Developer가 P0 API를 완성하고 데이터 검증을 수행합니다.
 
----
-
-## 💡 TriHanzi 실제 구현
-
-**페이지** (5개):
-- `/` - 홈페이지 (검색)
-- `/search` - 고급 검색
-- `/character/[id]` - 문자 상세
-- `/compare` - 문자 비교
-- `/collections/false-friends` - False Friends 컬렉션
-
-**컴포넌트** (41개, 주요만 나열):
-- `SearchBar.tsx` - 메인 검색창
-- `CharacterCard.tsx` - 문자 카드
-- `PronunciationTable.tsx` - 발음 테이블
-- `ComparisonTable.tsx` - 비교 테이블
-- `FalseFriendCard.tsx` - False Friends 카드
-- `SideBySideComparison.tsx` - 나란히 비교
-- `OverlayComparison.tsx` - 오버레이 비교
-- `Pagination.tsx` - 페이지네이션
-
-**기술 스택**:
-- Next.js 16 App Router (RSC)
-- Tailwind CSS 4.0
-- TypeScript strict mode
-- Radix UI (접근성)
-
-**반응형**:
-- 모바일: 1열 레이아웃
-- 태블릿: 2열 레이아웃
-- 데스크톱: 3열 레이아웃

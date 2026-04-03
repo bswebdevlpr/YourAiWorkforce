@@ -146,6 +146,10 @@ const envSchema = z.object({
 
 export const env = envSchema.parse(process.env);
 
+**환경변수 누락 시 동작**:
+- 필수 변수 (`DATABASE_URL`, `NODE_ENV`) 누락: 앱 시작 실패 + 명확한 에러 메시지
+- 선택 변수 (`REDIS_URL`) 누락: 해당 기능 비활성화 + 경고 로그. 프로덕션에서는 rate limiting을 in-memory 폴백으로 대체
+
 // 시크릿 검증 (프로덕션)
 if (process.env.NODE_ENV === 'production') {
   const requiredSecrets = [
@@ -402,6 +406,10 @@ export function CookieConsent() {
 }
 ```
 
+**쿠키 동의 정책**:
+- 동의 쿠키 유효기간: 12개월. 만료 시 재동의 요청
+- `localStorage`의 `cookie-consent` 값이 없으면 배너를 다시 표시한다
+
 **체크리스트**:
 - [ ] 쿠키 동의 배너 구현
 - [ ] 4개 언어 지원
@@ -435,6 +443,14 @@ export function CookieConsent() {
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| CSP 헤더로 인한 리소스 차단 | 브라우저 콘솔에서 차단된 도메인 확인, `Content-Security-Policy`에 추가 |
+| Rate limiting 과도 적용 | 개발 환경에서는 rate limiting 비활성화 (`NODE_ENV === 'development'`) |
+| HTTPS 리다이렉트 루프 | Vercel 등 PaaS의 자동 HTTPS 설정과 수동 설정 중복 확인 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 보안 헤더 설정 완료
@@ -462,51 +478,3 @@ export function CookieConsent() {
 
 ---
 
-## 💡 TriHanzi 실제 보안 & 컴플라이언스
-
-**구현 사항**:
-
-### 1. 보안 헤더
-```typescript
-// next.config.ts
-const securityHeaders = [
-  { key: 'X-DNS-Prefetch-Control', value: 'on' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
-  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
-];
-```
-
-### 2. Rate Limiting
-- **제한**: 10 요청 / 10초
-- **적용**: 모든 API 라우트
-- **헤더**: `X-RateLimit-*` 반환
-- **Graceful degradation**: Redis 연결 실패 시 계속 작동
-
-### 3. 환경 변수
-```bash
-# .env.example
-DATABASE_URL="postgresql://..."
-UPSTASH_REDIS_REST_URL="https://..."
-UPSTASH_REDIS_REST_TOKEN="***"
-NEXT_PUBLIC_APP_URL="https://trihanzi.com"
-```
-
-### 4. 법적 페이지
-- ✅ 개인정보 처리방침 (4개 언어)
-- ✅ 서비스 약관 (4개 언어)
-- ✅ Footer에 링크 추가
-
-### 5. 쿠키 동의
-- ✅ 3단계 배너 (정보 → 동의/거부 → 설정)
-- ✅ LocalStorage 저장
-- ✅ 페이지 차단하지 않음
-
-**보안 점검 결과**:
-- ✅ HTTPS 강제 (HSTS)
-- ✅ XSS 방지 (CSP, X-XSS-Protection)
-- ✅ Clickjacking 방지 (X-Frame-Options)
-- ✅ MIME sniffing 방지 (X-Content-Type-Options)
-- ✅ Rate limiting (DDoS 방지)
-- ✅ 시크릿 분리 (.env, 환경 변수)

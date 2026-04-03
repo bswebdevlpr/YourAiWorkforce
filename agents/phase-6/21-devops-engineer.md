@@ -132,6 +132,16 @@ console.log('\n✅ 모든 필수 환경 변수 설정됨');
 
 ### Step 3: 데이터베이스 마이그레이션 (15분)
 
+> ⚠️ **필수**: 프로덕션 마이그레이션 전 반드시 데이터베이스를 백업한다.
+> ```bash
+> # PostgreSQL 백업
+> pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql
+> ```
+> 마이그레이션 실패 시 롤백 절차:
+> 1. 마이그레이션 중단 (재시도 금지)
+> 2. 백업에서 복원: `psql $DATABASE_URL < backup_YYYYMMDD_HHMMSS.sql`
+> 3. 스테이징 환경에서 마이그레이션 원인 조사 후 재시도
+
 ```bash
 # 프로덕션 데이터베이스에 마이그레이션 실행
 DATABASE_URL="postgresql://..." npx prisma migrate deploy
@@ -171,20 +181,22 @@ vercel --prod
 vercel inspect <deployment-url>
 ```
 
+> 배포 완료 후 60초 대기한 뒤 스모크 테스트를 실행한다. 배포 직후에는 CDN 캐시 갱신 및 서버 웜업이 진행 중일 수 있다.
+
 **배포 후 스모크 테스트**:
 
 ```bash
 # 홈페이지
-curl -I https://trihanzi.com
+curl -I https://[your-domain.com]
 
 # API 엔드포인트
-curl https://trihanzi.com/api/characters?page=1&limit=5
+curl https://[your-domain.com]/api/[resources]?page=1&limit=5
 
 # Sitemap
-curl https://trihanzi.com/sitemap.xml
+curl https://[your-domain.com]/sitemap.xml
 
 # Robots.txt
-curl https://trihanzi.com/robots.txt
+curl https://[your-domain.com]/robots.txt
 ```
 
 **배포 체크리스트**:
@@ -201,13 +213,12 @@ curl https://trihanzi.com/robots.txt
 - [x] 홈페이지 (/)
 - [x] 검색 (/search)
 - [x] 비교 (/compare)
-- [x] 문자 상세 (/characters/[id])
+- [x] [Resource] 상세 (/[resources]/[id])
 - [x] About (/about)
 
 ### API 확인
-- [x] /api/characters
+- [x] /api/[resources]
 - [x] /api/search
-- [x] /api/compare
 
 ### SEO 확인
 - [x] sitemap.xml
@@ -217,8 +228,7 @@ curl https://trihanzi.com/robots.txt
 ### 다국어 확인
 - [x] /en
 - [x] /ko
-- [x] /ja
-- [x] /zh
+- [x] 프로젝트 지원 로케일 추가 확인
 
 ✅ **배포 검증 완료**
 ```
@@ -278,8 +288,8 @@ Sentry.init({
 ```bash
 # Uptime Robot 또는 Vercel Monitoring 사용
 # 모니터링 URL 설정:
-# - https://trihanzi.com
-# - https://trihanzi.com/api/characters
+# - https://[your-domain.com]
+# - https://[your-domain.com]/api/[resources]
 ```
 
 **5.4 알림 설정**
@@ -370,8 +380,8 @@ jobs:
    ```
 
 4. **검증**
-   - 홈페이지 접근: https://trihanzi.com
-   - API 테스트: https://trihanzi.com/api/characters
+   - 홈페이지 접근: https://[your-domain.com]
+   - API 테스트: https://[your-domain.com]/api/[resources]
    - Lighthouse 점수 확인
 
 ---
@@ -397,8 +407,8 @@ vercel rollback <deployment-url>
 
 ## 긴급 연락처
 
-- DevOps: devops@trihanzi.com
-- 온콜: +82-10-XXXX-XXXX
+- DevOps: devops@[your-domain.com]
+- 온콜: [연락처]
 ```
 
 ---
@@ -420,6 +430,15 @@ vercel rollback <deployment-url>
    - `docs/deployment.md`
 
 ---
+
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| 배포 실패 | Vercel 배포 로그 확인, 빌드 에러 수정 후 재배포. 이전 배포로 즉시 롤백 가능 (`vercel rollback`) |
+| DB 마이그레이션 실패 | 백업에서 복원, 스테이징에서 원인 조사. **프로덕션에서 재시도 금지** |
+| 스모크 테스트 실패 | 실패 항목 확인, 크리티컬(API 500)이면 즉시 롤백, 비크리티컬이면 핫픽스 배포 |
+| 환경변수 누락 | `vercel env ls` 로 확인, 누락 변수 추가 후 재배포 |
 
 ## ✅ 완료 체크리스트
 
@@ -450,28 +469,3 @@ vercel rollback <deployment-url>
 
 ---
 
-## 💡 TriHanzi 실제 배포
-
-**인프라**:
-- **호스팅**: Vercel (Serverless)
-- **데이터베이스**: Neon PostgreSQL (Serverless)
-- **캐시**: Upstash Redis (Serverless)
-- **CDN**: Vercel Edge Network
-
-**배포 통계**:
-- 빌드 시간: 2분 34초
-- 번들 크기: 152KB (초기 로드)
-- Edge Functions: 8개 (API 라우트)
-
-**모니터링**:
-- **Vercel Analytics**: 활성화
-- **실시간 로그**: Vercel 대시보드
-- **업타임**: 99.9%
-
-**성능** (프로덕션):
-- TTFB: 187ms
-- FCP: 1.2s
-- LCP: 1.8s
-- CLS: 0.02
-
-**배포 URL**: https://trihanzi.com

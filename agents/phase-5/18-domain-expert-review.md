@@ -82,64 +82,64 @@ async function stratifiedSampling() {
   // 카테고리별로 샘플 추출
   const samples = {
     // 고빈도 데이터
-    highFrequency: await prisma.character.findMany({
+    highFrequency: await prisma.[resource].findMany({
       where: {
-        // 도메인별 고빈도 기준 (예: HSK 1급, JLPT N5)
+        // 도메인별 고빈도 기준 (예: level 1, category A)
         OR: [
-          { hskLevel: 1 },
-          { jlptLevel: 5 },
+          { level: 1 },
+          { category: 'primary' },
         ],
       },
       take: 50,
       include: {
-        pronunciations: true,
-        meanings: true,
+        details: true,
+        metadata: true,
       },
     }),
 
     // 중간 빈도
-    mediumFrequency: await prisma.character.findMany({
+    mediumFrequency: await prisma.[resource].findMany({
       where: {
         OR: [
-          { hskLevel: { gte: 2, lte: 4 } },
-          { jlptLevel: { gte: 3, lte: 4 } },
+          { level: { gte: 2, lte: 4 } },
+          { category: 'secondary' },
         ],
       },
       take: 30,
       include: {
-        pronunciations: true,
-        meanings: true,
+        details: true,
+        metadata: true,
       },
     }),
 
     // 저빈도 (희귀)
-    lowFrequency: await prisma.character.findMany({
+    lowFrequency: await prisma.[resource].findMany({
       where: {
         OR: [
-          { hskLevel: { gte: 5 } },
-          { jlptLevel: { lte: 2 } },
+          { level: { gte: 5 } },
+          { category: 'rare' },
         ],
       },
       take: 20,
       include: {
-        pronunciations: true,
-        meanings: true,
+        details: true,
+        metadata: true,
       },
     }),
 
     // 엣지 케이스 (변형, 특수 케이스)
-    edgeCases: await prisma.character.findMany({
+    edgeCases: await prisma.[resource].findMany({
       where: {
         OR: [
           { variants: { some: {} } },
-          { pronunciations: { none: {} } }, // 발음 누락
-          { meanings: { none: {} } }, // 의미 누락
+          { details: { none: {} } }, // 상세 정보 누락
+          { metadata: { none: {} } }, // 메타데이터 누락
         ],
       },
       take: 20,
       include: {
-        pronunciations: true,
-        meanings: true,
+        details: true,
+        metadata: true,
         variants: true,
       },
     }),
@@ -154,12 +154,12 @@ async function stratifiedSampling() {
   ];
 
   const csv = [
-    ['ID', 'Character', 'Pronunciations', 'Meanings', 'Category', 'Notes'].join(','),
+    ['ID', 'Name', 'Details', 'Metadata', 'Category', 'Notes'].join(','),
     ...allSamples.map((s) => [
       s.id,
-      s.char,
-      s.pronunciations.map(p => p.text).join(';'),
-      s.meanings.map(m => m.text).join(';'),
+      s.name,
+      s.details.map(d => d.text).join(';'),
+      s.metadata.map(m => m.value).join(';'),
       '', // Category (수동 입력)
       '', // Notes (수동 입력)
     ].join(',')),
@@ -183,9 +183,9 @@ stratifiedSampling()
 
 1. `docs/reports/domain-samples.csv` 열기
 2. 각 샘플에 대해 도메인 지식을 활용하여 검증:
-   - 발음이 정확한가?
-   - 의미가 정확한가?
+   - 핵심 데이터가 정확한가?
    - 분류가 올바른가?
+   - 메타데이터가 완전한가?
 3. 오류 발견 시 Notes 컬럼에 기록
 
 **체크리스트**:
@@ -200,7 +200,7 @@ stratifiedSampling()
 
 Phase 3에서 구현된 알고리즘의 출력을 검증하세요.
 
-**예시 (TriHanzi - 발음 유추 알고리즘)**:
+**예시 (도메인 알고리즘 출력 검증)**:
 
 ```typescript
 // scripts/reporting/verify-algorithm-output.ts
@@ -212,20 +212,19 @@ const prisma = new PrismaClient();
 async function verifyAlgorithmOutput() {
   console.log('🔬 알고리즘 출력 검증');
 
-  // 발음 유추 결과 샘플
-  const samples = await prisma.pronunciation.findMany({
+  // 알고리즘 생성 결과 샘플
+  const samples = await prisma.[result].findMany({
     where: {
-      source: 'jp_inference', // 알고리즘 생성
+      source: 'algorithm', // 알고리즘 생성
       confidence: { gte: 60 }, // 신뢰도 60% 이상만
     },
     take: 100,
     include: {
-      character: {
+      [resource]: {
         include: {
-          pronunciations: {
+          groundTruth: {
             where: {
-              country: 'KOREA',
-              source: { not: 'jp_inference' }, // 원본 데이터
+              source: { not: 'algorithm' }, // 원본 데이터
             },
           },
         },
@@ -238,18 +237,18 @@ async function verifyAlgorithmOutput() {
   const errors: any[] = [];
 
   samples.forEach((sample) => {
-    const inferredPronunciation = sample.text;
-    const actualPronunciations = sample.character.pronunciations.map(p => p.text);
+    const inferred = sample.value;
+    const actuals = sample.[resource].groundTruth.map(g => g.value);
 
     // 일치 여부 확인
-    if (actualPronunciations.includes(inferredPronunciation)) {
+    if (actuals.includes(inferred)) {
       correct++;
     } else {
       incorrect++;
       errors.push({
-        character: sample.character.char,
-        inferred: inferredPronunciation,
-        actual: actualPronunciations,
+        resource: sample.[resource].name,
+        inferred,
+        actual: actuals,
         confidence: sample.confidence,
       });
     }
@@ -262,7 +261,7 @@ async function verifyAlgorithmOutput() {
   if (errors.length > 0) {
     console.log(`\n⚠️  오류 케이스 (상위 10개):`);
     errors.slice(0, 10).forEach((e) => {
-      console.log(`  ${e.character}: 유추=${e.inferred}, 실제=${e.actual.join('/')}`);
+      console.log(`  ${e.resource}: 유추=${e.inferred}, 실제=${e.actual.join('/')}`);
     });
   }
 
@@ -292,9 +291,9 @@ verifyAlgorithmOutput()
 ```markdown
 # 도메인 전문가 리뷰 보고서
 
-**프로젝트**: TriHanzi - CJK Character Comparison
-**리뷰어**: Dr. Lee Hanja (비교 언어학 전문가)
-**날짜**: 2026-02-16
+**프로젝트**: [project-name]
+**리뷰어**: [Domain Expert] ([domain] 전문가)
+**날짜**: [날짜]
 **Phase**: 5 - Quality Improvement
 
 ---
@@ -303,222 +302,176 @@ verifyAlgorithmOutput()
 
 | 카테고리 | 점수 | 비고 |
 |---------|------|------|
-| 데이터 정확성 | 28/30 | 발음 커버리지 우수 |
-| 알고리즘 품질 | 22/25 | 정확도 목표 달성 |
-| 도메인 적합성 | 18/20 | 용어 정확, 컨텍스트 우수 |
-| 사용성 | 14/15 | 직관적인 인터페이스 |
-| 문서화 | 10/10 | 출처 명확, 배경 상세 |
-| **총점** | **92/100 (A)** | **프로덕션 품질** |
+| 데이터 정확성 | [N]/30 | [비고] |
+| 알고리즘 품질 | [N]/25 | [비고] |
+| 도메인 적합성 | [N]/20 | [비고] |
+| 사용성 | [N]/15 | [비고] |
+| 문서화 | [N]/10 | [비고] |
+| **총점** | **[N]/100 ([등급])** | **[판정]** |
 
 ---
 
-## 1. 데이터 정확성 (28/30)
+## 1. 데이터 정확성 ([N]/30)
 
-### 1.1 핵심 데이터 정확성 (14/15)
+### 1.1 핵심 데이터 정확성 ([N]/15)
 
 **검증 방법**: 100개 샘플 수동 검증 (계층화 샘플링)
 
 **결과**:
-- ✅ 발음 정확도: 97% (97/100)
-- ✅ 의미 정확도: 95% (95/100)
-- ✅ 분류 정확도: 100% (100/100)
+- [domain accuracy metric]: [N]% ([N]/100)
+- 분류 정확도: [N]% ([N]/100)
 
 **오류 사례**:
-- 발음: "樂" → 한국어 "악"만 있고 "락/낙" 누락
-- 의미: "間" → "room" 의미 누락
+- [구체적 오류 사례 기록]
 
 **추천**:
-- [ ] 다음 발음 추가: 樂(락/낙), 便(변/편)
-- [ ] 의미 보강: 間(room, interval, space)
+- [ ] [개선 사항]
 
-**점수 근거**: 경미한 오류 3%, 전반적으로 매우 정확
+**채점 시 필수 기록**: 각 카테고리에서 감점이 있으면 최소 2-3문장으로 근거를 기록한다. 예:
+- "데이터 30건 중 2건이 공식 소스와 불일치. -2점"
+- 점수는 정수로 반올림한다 (소수점은 보고서에 참고용으로 기록)
+
+**점수 근거**: [근거]
 
 ---
 
-### 1.2 데이터 커버리지 (9/10)
+### 1.2 데이터 커버리지 ([N]/10)
 
 **통계**:
-- 총 문자: 10,000개
-- 발음 커버리지: 73.0%
-- 의미 커버리지: 82.1%
-- 교육 레벨 커버리지: 68.5%
+- 총 레코드: [N]개
+- [metric] 커버리지: [N]%
 
 **장점**:
-- ✅ 상용 한자 (HSK 1-6, JLPT N5-N1) 100% 커버
-- ✅ 3개국 발음 균형 (한국 73%, 일본 95%, 중국 98%)
+- ✅ [장점 기록]
 
 **개선 필요**:
-- ⚠️  한국어 발음 커버리지가 상대적으로 낮음 (73%)
-- ⚠️  교육 레벨 누락 (31.5%)
+- ⚠️  [개선 필요 항목]
 
 **추천**:
-- [ ] 한국어 발음 추가 보강 (목표 85%)
-- [ ] 교육 레벨 데이터 추가 (한국 교육용 한자)
+- [ ] [개선 사항]
 
-**점수 근거**: 커버리지 양호하나 한국 데이터 보강 필요
+**점수 근거**: [근거]
 
 ---
 
-### 1.3 데이터 출처 신뢰성 (5/5)
+### 1.3 데이터 출처 신뢰성 ([N]/5)
 
 **출처**:
-- Unihan Database (Unicode Consortium) - 공식, 신뢰도 100%
-- CC-CEDICT - 오픈소스, 124,259 항목, 신뢰도 95%
-- KANJIDIC2 - 공식, 13,108자, 신뢰도 100%
+- [출처 1] - [신뢰도]
+- [출처 2] - [신뢰도]
 
-**점수 근거**: 모든 출처가 신뢰할 수 있고 명시됨
+**점수 근거**: [근거]
 
 ---
 
-## 2. 알고리즘 품질 (22/25)
+## 2. 알고리즘 품질 ([N]/25)
 
-### 2.1 알고리즘 정확도 (13/15)
+### 2.1 알고리즘 정확도 ([N]/15)
 
-**발음 유추 알고리즘** (중고음 대응):
-- 테스트 샘플: 499개
-- 정확도: 86.1%
-- 신뢰도: 평균 92.3
+**[알고리즘 이름]**:
+- 테스트 샘플: [N]개
+- 정확도: [N]%
+- 신뢰도: 평균 [N]
 
 **도메인 전문가 의견**:
-- ✅ 중고음 재구 기반 접근법은 학술적으로 타당
-- ✅ 입성음 복원 (く → 곡, つ → 촬) 정확도 높음
-- ⚠️  일부 예외 케이스 (역사적 음운 변화) 미처리
+- ✅ [긍정 평가]
+- ⚠️  [개선 필요 사항]
 
-**Jaccard 유사도** (False Friends):
-- 662개 False Friends 감지
-- 샘플 검증: 150개 중 147개 정확 (98%)
-
-**점수 근거**: 정확도 우수하나 엣지 케이스 개선 여지
+**점수 근거**: [근거]
 
 ---
 
-### 2.2 엣지 케이스 처리 (4/5)
+### 2.2 엣지 케이스 처리 ([N]/5)
 
 **처리 케이스**:
-- ✅ NULL 발음/의미 처리
-- ✅ Youon 구개음화 처리 (42개 매핑)
+- ✅ NULL/누락 데이터 처리
 - ✅ 신뢰도 점수 출력
 
 **미처리 케이스**:
-- ⚠️  한국 한자음의 두음법칙 (예: 女 → 녀/여)
-- ⚠️  일본 한자의 특수 음독 (湯桶読み, 重箱読み)
+- ⚠️  [미처리 항목]
 
-**추천**:
-- [ ] 두음법칙 규칙 추가
-- [ ] 특수 음독 케이스 문서화
-
-**점수 근거**: 주요 케이스 처리되나 일부 누락
+**점수 근거**: [근거]
 
 ---
 
-### 2.3 투명성 (5/5)
+### 2.3 투명성 ([N]/5)
 
-- ✅ 모든 발음에 출처 명시 (source 필드)
+- ✅ 모든 결과에 출처 명시 (source 필드)
 - ✅ 신뢰도 점수 제공 (0-100)
 - ✅ 알고리즘 문서화 (`docs/algorithms.md`)
 
-**점수 근거**: 완벽한 투명성
+**점수 근거**: [근거]
 
 ---
 
-## 3. 도메인 적합성 (18/20)
+## 3. 도메인 적합성 ([N]/20)
 
-### 3.1 용어 정확성 (9/10)
+### 3.1 용어 정확성 ([N]/10)
 
-- ✅ "False Friends" 용어 적절
-- ✅ 국가별 용어 정확 (한자/漢字/汉字)
-- ✅ 발음 타입 정확 (KUN/ON/MANDARIN/CANTONESE)
+- [도메인 용어 정확성 평가]
 
-**개선**:
-- ⚠️  "中古音" → "Middle Chinese" 번역 추가
-
-**점수 근거**: 용어 대부분 정확
+**점수 근거**: [근거]
 
 ---
 
-### 3.2 분류 체계 (4/5)
+### 3.2 분류 체계 ([N]/5)
 
-- ✅ HSK 레벨 (1-6) 정확
-- ✅ JLPT 레벨 (N5-N1) 정확
-- ⚠️  한국 교육용 한자 분류 누락
+- [분류 체계 평가]
 
-**추천**:
-- [ ] 한국 교육용 기초/상용/준상용 분류 추가
-
-**점수 근거**: 중국/일본 분류 완벽, 한국 누락
+**점수 근거**: [근거]
 
 ---
 
-### 3.3 컨텍스트 이해 (5/5)
+### 3.3 컨텍스트 이해 ([N]/5)
 
-- ✅ 국가별 의미 차이 반영 (예: 手紙)
-- ✅ False Friends 컨텍스트 명확
-- ✅ 역사적 음운 변화 이해
+- [도메인 컨텍스트 이해 평가]
 
-**점수 근거**: 도메인 컨텍스트 완벽 이해
+**점수 근거**: [근거]
 
 ---
 
-## 4. 사용성 (14/15)
+## 4. 사용성 ([N]/15)
 
-### 4.1 사용자 플로우 (7/8)
+### 4.1 사용자 플로우 ([N]/8)
 
-- ✅ 검색 → 상세 → 비교 플로우 직관적
-- ✅ False Friends 경고 명확
-- ⚠️  발음 재생 기능 없음 (음성)
+- [사용자 플로우 평가]
 
-**추천**:
-- [ ] 발음 오디오 추가 (향후)
-
-**점수 근거**: 플로우 우수하나 음성 기능 부재
+**점수 근거**: [근거]
 
 ---
 
-### 4.2 정보 표시 (7/7)
+### 4.2 정보 표시 ([N]/7)
 
-- ✅ 국가별 색상 코딩 명확
-- ✅ 발음/의미 구분 명확
-- ✅ 신뢰도 점수 표시
+- [정보 표시 평가]
 
-**점수 근거**: 정보 표시 완벽
+**점수 근거**: [근거]
 
 ---
 
-## 5. 문서화 (10/10)
+## 5. 문서화 ([N]/10)
 
-- ✅ 도메인 지식 문서 (412줄)
-- ✅ 모든 데이터 출처 명시
-- ✅ 알고리즘 설명 상세
-- ✅ 제한사항 명시
+- [문서화 평가]
 
-**점수 근거**: 문서화 완벽
+**점수 근거**: [근거]
 
 ---
 
 ## 종합 평가
 
-**총점**: 92/100 (A)
+**총점**: [N]/100 ([등급])
 
 **강점**:
-- 데이터 정확성 매우 높음 (97%)
-- 알고리즘 학술적으로 타당
-- 투명성 완벽
-- 문서화 우수
+- [강점]
 
 **개선 필요**:
-- 한국어 발음 커버리지 보강 (73% → 85%)
-- 두음법칙 처리
-- 한국 교육용 한자 분류 추가
-- 경미한 발음/의미 오류 수정
+- [개선 사항]
 
-**결론**: ✅ **프로덕션 품질 달성**
-
-이 프로젝트는 도메인 전문가 관점에서 프로덕션에 배포 가능한 수준입니다. 제안된 개선사항은 선택적이며, 현재 상태로도 사용자에게 큰 가치를 제공할 수 있습니다.
+**결론**: [판정]
 
 ---
 
-**리뷰어 서명**: Dr. Lee Hanja
-**날짜**: 2026-02-16
+**리뷰어 서명**: [Domain Expert]
+**날짜**: [날짜]
 ```
 
 **체크리스트**:
@@ -543,6 +496,14 @@ verifyAlgorithmOutput()
    - `docs/reports/domain-expert-review.md`
 
 ---
+
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| 샘플 데이터가 편향됨 (특정 카테고리 과다) | 샘플링 비율 재조정, 카테고리별 균등 추출 |
+| 도메인 전문가와 알고리즘 저자 간 판단 불일치 | 양측 근거를 보고서에 병기, Orchestrator가 사용자에게 중재 요청 |
+| 검증 점수 < 70 (Phase 3 복귀 대상) | 감점 항목을 우선순위별로 정리, 복귀 시 수정 범위를 명시 |
 
 ## ✅ 완료 체크리스트
 
@@ -573,22 +534,3 @@ verifyAlgorithmOutput()
 
 ---
 
-## 💡 TriHanzi 실제 도메인 전문가 리뷰
-
-**리뷰 이력**:
-1. **1차 리뷰 (B+)**: 87.5/100 - 발음 커버리지 부족
-2. **2차 리뷰 (A-)**: 91.0/100 - 발음 개선, 교육 데이터 추가
-3. **3차 리뷰 (A)**: 93.5/100 - 문서 개선
-4. **4차 리뷰 (A+)**: 95.0/100 - 모든 개선 완료
-
-**최종 점수 분해**:
-- 데이터 정확성: 28/30 (93%)
-- 알고리즘 품질: 23/25 (92%)
-- 도메인 적합성: 19/20 (95%)
-- 사용성: 15/15 (100%)
-- 문서화: 10/10 (100%)
-
-**개선 이력**:
-- 발음 커버리지: 51.4% → 73.0% (21.6%p)
-- 의미 커버리지: 68.2% → 82.1% (13.9%p)
-- 알고리즘 정확도: 73.2% → 86.1% (12.9%p)

@@ -10,6 +10,8 @@
 - ✅ **필수**: 컴포넌트 (`src/components/`)
 - ✅ **필수**: i18n 번역 파일 (`src/i18n/locales/`)
 
+> **범위 정의**: "모든 페이지"는 `src/app/[locale]/` 하위의 사용자 대면 페이지를 의미한다. API 라우트(`/api/`), 에러 페이지(`error.tsx`, `not-found.tsx`)는 제외한다.
+
 ---
 
 ## 🔨 작업 Step-by-Step
@@ -39,7 +41,7 @@ export async function generateMetadata({
       title: t('meta.title'),
       description: t('meta.description'),
       url: `https://example.com/${locale}`,
-      siteName: 'TriHanzi',
+      siteName: '[project-name]',
       images: [
         {
           url: '/og-image.png',
@@ -62,8 +64,7 @@ export async function generateMetadata({
       languages: {
         en: '/en',
         ko: '/ko',
-        ja: '/ja',
-        zh: '/zh',
+        // 필요한 로케일 추가
       },
     },
   };
@@ -73,26 +74,26 @@ export async function generateMetadata({
 **1.2 동적 페이지 메타데이터**
 
 ```typescript
-// src/app/[locale]/characters/[id]/page.tsx
+// src/app/[locale]/[resources]/[id]/page.tsx
 
 export async function generateMetadata({
   params: { id, locale },
 }: {
   params: { id: string; locale: string };
 }): Promise<Metadata> {
-  const character = await getCharacter(id);
-  const t = await getTranslations({ locale, namespace: 'character' });
+  const resource = await getResource(id);
+  const t = await getTranslations({ locale, namespace: 'resource' });
 
-  if (!character) {
+  if (!resource) {
     return {
       title: 'Not Found',
     };
   }
 
-  const title = `${character.char} - ${t('meta.title')}`;
+  const title = `${resource.name} - ${t('meta.title')}`;
   const description = t('meta.description', {
-    char: character.char,
-    meanings: character.meanings.slice(0, 3).join(', '),
+    name: resource.name,
+    summary: resource.summary,
   });
 
   return {
@@ -101,13 +102,13 @@ export async function generateMetadata({
     openGraph: {
       title,
       description,
-      url: `https://example.com/${locale}/characters/${id}`,
+      url: `https://example.com/${locale}/[resources]/${id}`,
       images: [
         {
-          url: `/api/og?char=${encodeURIComponent(character.char)}`,
+          url: `/api/og?id=${encodeURIComponent(id)}`,
           width: 1200,
           height: 630,
-          alt: character.char,
+          alt: resource.name,
         },
       ],
     },
@@ -136,15 +137,14 @@ import { prisma } from '@/lib/db/prisma';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://example.com';
-  const locales = ['en', 'ko', 'ja', 'zh'];
+  const locales = ['en', 'ko']; // 프로젝트 지원 로케일
 
   // 정적 페이지
   const staticPages = [
     '',
     '/search',
-    '/compare',
     '/about',
-    '/collections/false-friends',
+    // 프로젝트별 정적 페이지 추가
   ];
 
   const staticUrls = locales.flatMap((locale) =>
@@ -161,26 +161,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
   );
 
-  // 동적 페이지 (문자 상세)
-  const characters = await prisma.character.findMany({
+  // 동적 페이지 ([Resource] 상세)
+  const resources = await prisma.[resource].findMany({
     select: { id: true, updatedAt: true },
   });
 
-  const characterUrls = locales.flatMap((locale) =>
-    characters.map((char) => ({
-      url: `${baseUrl}/${locale}/characters/${char.id}`,
-      lastModified: char.updatedAt,
+  const resourceUrls = locales.flatMap((locale) =>
+    resources.map((item) => ({
+      url: `${baseUrl}/${locale}/[resources]/${item.id}`,
+      lastModified: item.updatedAt,
       changeFrequency: 'monthly' as const,
       priority: 0.6,
       alternates: {
         languages: Object.fromEntries(
-          locales.map((l) => [l, `${baseUrl}/${l}/characters/${char.id}`])
+          locales.map((l) => [l, `${baseUrl}/${l}/[resources]/${item.id}`])
         ),
       },
     }))
   );
 
-  return [...staticUrls, ...characterUrls];
+  return [...staticUrls, ...resourceUrls];
 }
 ```
 
@@ -218,26 +218,26 @@ export default function robots(): MetadataRoute.Robots {
 ```typescript
 // src/components/StructuredData.tsx
 
-export function StructuredData({ character }: { character: Character }) {
+export function StructuredData({ resource }: { resource: Resource }) {
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'Article',
-    headline: `${character.char} - CJK Character`,
-    description: character.meanings.join(', '),
+    headline: `${resource.name} - [MainEntity]`,
+    description: resource.summary,
     author: {
       '@type': 'Organization',
-      name: 'TriHanzi',
+      name: '[project-name]',
     },
     publisher: {
       '@type': 'Organization',
-      name: 'TriHanzi',
+      name: '[project-name]',
       logo: {
         '@type': 'ImageObject',
         url: 'https://example.com/logo.png',
       },
     },
-    datePublished: character.createdAt,
-    dateModified: character.updatedAt,
+    datePublished: resource.createdAt,
+    dateModified: resource.updatedAt,
   };
 
   return (
@@ -252,12 +252,12 @@ export function StructuredData({ character }: { character: Character }) {
 **사용법**:
 
 ```typescript
-// src/app/[locale]/characters/[id]/page.tsx
+// src/app/[locale]/[resources]/[id]/page.tsx
 
-export default function CharacterPage({ character }) {
+export default function ResourceDetailPage({ resource }) {
   return (
     <>
-      <StructuredData character={character} />
+      <StructuredData resource={resource} />
       {/* 페이지 내용 */}
     </>
   );
@@ -281,8 +281,8 @@ export default function CharacterPage({ character }) {
 import Image from 'next/image';
 
 <Image
-  src="/images/character.png"
-  alt="Character"
+  src="/images/[resource].png"
+  alt="[Resource]"
   width={200}
   height={200}
   loading="lazy"
@@ -339,6 +339,11 @@ const config = {
 
 **4.3 Lazy Loading**
 
+**동적 import 대상 기준**:
+- 초기 뷰포트에 보이지 않는 컴포넌트 (below-the-fold)
+- 사용자 인터랙션 후에만 표시되는 모달, 드롭다운, 차트
+- 조건부 렌더링 컴포넌트 (로그인 후에만 표시 등)
+
 ```typescript
 // 동적 import
 import dynamic from 'next/dynamic';
@@ -353,13 +358,13 @@ const CompareClient = dynamic(() => import('@/components/compare/CompareClient')
 
 ```typescript
 // 중요한 리소스 prefetch
-<link rel="prefetch" href="/api/characters/popular" />
+<link rel="prefetch" href="/api/[resources]/popular" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 ```
 
 **체크리스트**:
 - [ ] 모든 이미지 next/Image로 변환
-- [ ] 번들 크기 최적화 (< 200KB initial bundle)
+- [ ] 번들 크기 최적화 (< 200KB initial bundle) (gzipped 기준, CSS/폰트 제외. `next build` 출력의 "First Load JS" 항목으로 측정)
 - [ ] Lazy loading 적용 (비필수 컴포넌트)
 - [ ] Prefetching 설정
 - [ ] 압축 활성화
@@ -376,7 +381,7 @@ const CompareClient = dynamic(() => import('@/components/compare/CompareClient')
 import * as fs from 'fs';
 import * as path from 'path';
 
-const locales = ['en', 'ko', 'ja', 'zh'];
+const locales = ['en', 'ko']; // 프로젝트 지원 로케일
 const localesDir = path.join(process.cwd(), 'src/i18n/locales');
 
 function validateI18n() {
@@ -527,6 +532,14 @@ module.exports = {
 
 ---
 
+## ⚠️ 실패 대응
+
+| 상황 | 조치 |
+|------|------|
+| Lighthouse Performance < 85 | 번들 분석(`@next/bundle-analyzer`), 미사용 의존성 제거, 이미지 최적화 확인 |
+| CLS(Cumulative Layout Shift) > 0.1 | 이미지/폰트에 `width`/`height` 명시, 스켈레톤 UI 적용 |
+| i18n 번역 키 누락 | `next-intl`의 `onError` 핸들러로 누락 키 로깅, 기본 언어(en) 폴백 |
+
 ## ✅ 완료 체크리스트
 
 - [ ] 모든 페이지 SEO 메타데이터 추가
@@ -555,42 +568,3 @@ module.exports = {
 "agent-system/agents/phase-4/15-security-compliance.md를 읽고 SCA로 작동해주세요"
 ```
 
----
-
-## 💡 TriHanzi 실제 SEO & 성능 최적화
-
-**구현 결과**:
-
-### 1. Lighthouse 점수
-- **Performance**: 92/100
-- **Accessibility**: 100/100
-- **SEO**: 100/100
-- **Best Practices**: 96/100
-
-### 2. SEO 구현
-- ✅ 모든 페이지 메타데이터
-- ✅ OpenGraph 이미지 (동적 생성)
-- ✅ JSON-LD 구조화된 데이터
-- ✅ Sitemap.xml (10,000+ URLs)
-- ✅ hreflang (4개 언어)
-
-### 3. 성능 최적화
-- ✅ 모든 이미지 next/Image 변환
-- ✅ 번들 크기: 초기 152KB (목표 < 200KB)
-- ✅ Lazy loading (CompareClient, Charts)
-- ✅ Code splitting (vendor, ui, lib)
-- ✅ 압축 활성화 (gzip, brotli)
-
-### 4. i18n 완성
-- ✅ 4개 로케일: en, ko, ja, zh
-- ✅ 총 키: 각 로케일당 ~200개
-- ✅ 검증 스크립트로 100% 일치 확인
-
-**Before/After**:
-| 메트릭 | Before | After | 개선 |
-|--------|--------|-------|------|
-| First Contentful Paint | 2.1s | 1.2s | -43% |
-| Largest Contentful Paint | 3.8s | 1.8s | -53% |
-| Total Blocking Time | 420ms | 120ms | -71% |
-| Cumulative Layout Shift | 0.15 | 0.02 | -87% |
-| Bundle Size | 287KB | 152KB | -47% |
