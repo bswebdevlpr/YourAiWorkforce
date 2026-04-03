@@ -1,7 +1,8 @@
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 
 from src.config import MODEL_NAME_PLANNER
+from src.libs.artifacts import load_artifact
 from src.libs.model import create_chat_model
 from src.libs.path import PRD_PATH
 from src.libs.persona import PRODUCT_DISCOVERY, load_persona
@@ -15,8 +16,8 @@ _system_prompt = load_persona(PRODUCT_DISCOVERY)
 def _call_model(state: AgentState):
     messages = [{"role": "system", "content": _system_prompt}]
 
-    if PRD_PATH.exists():
-        existing_prd = PRD_PATH.read_text(encoding="utf-8")
+    existing_prd = load_artifact(PRD_PATH)
+    if existing_prd:
         messages.append({
             "role": "system",
             "content": f"기존 PRD가 있다. 피드백이 있으면 해당 부분만 수정하고, 전체를 다시 작성하지 마라.\n\n---\n{existing_prd}",
