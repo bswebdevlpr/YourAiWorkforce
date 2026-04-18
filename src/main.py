@@ -41,16 +41,30 @@ async def root(body: Annotated[PostBody, Body(description="유저 입력")]):
     config = {"configurable": {"thread_id": body.thread_id}}
 
     snapshot = await agent.aget_state(config)
+    thread_exists = bool(snapshot.values)
     is_interrupted = bool(snapshot.next)
 
-    if not is_interrupted and body.type != "message":
-        raise HTTPException(
-            status_code=400, detail="fresh thread requires type='message'"
-        )
-
-    if is_interrupted:
+    if body.type == "new":
+        if thread_exists:
+            raise HTTPException(
+                status_code=400,
+                detail="thread_id already exists; issue a new thread_id for new work",
+            )
+        input_ = {"messages": [("user", body.message)]}
+    elif is_interrupted:
+        if body.type not in ("message", "complete", "reject", "approve"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"invalid type '{body.type}' for interrupted thread",
+            )
         input_ = Command(resume={"type": body.type, "message": body.message})
     else:
+        # fresh thread 또는 END 도달 후 이어서 진행 — message만 허용
+        if body.type != "message":
+            raise HTTPException(
+                status_code=400,
+                detail=f"non-interrupted thread requires type='message' or 'new', got '{body.type}'",
+            )
         input_ = {"messages": [("user", body.message)]}
 
     return StreamingResponse(

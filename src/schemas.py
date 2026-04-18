@@ -6,4 +6,4 @@ from pydantic import BaseModel
 class PostBody(BaseModel):
     message: str
     thread_id: str
-    type: Literal["message", "complete", "reject"] = "message"
+    type: Literal["message", "new", "complete", "reject", "approve"] = "message"
