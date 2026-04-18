@@ -6,7 +6,10 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 
 from src.libs.nodes import make_check_done_node, make_wait_for_user_node
+from src.libs.persona import CONVERSATIONAL_PROTOCOL, load_persona
 from src.state import AgentState
+
+_UNSET = object()
 
 
 def build_conversational_subgraph(
@@ -16,6 +19,7 @@ def build_conversational_subgraph(
     save_tool: BaseTool,
     artifact_path: Path | None = None,
     existing_hint: str = "기존 산출물이 있다. 피드백이 있으면 해당 부분만 수정하고, 전체를 다시 작성하지 마라.",
+    prologue: str | None = _UNSET,  # type: ignore[assignment]
 ):
     """내부 루프형 대화 서브그래프 빌더.
 
@@ -33,6 +37,10 @@ def build_conversational_subgraph(
     bound_model = model.bind_tools([save_tool])
     save_tool_name = save_tool.name
 
+    if prologue is _UNSET:
+        prologue = load_persona(CONVERSATIONAL_PROTOCOL)
+    system_content = f"{prologue}\n\n---\n\n{persona}" if prologue else persona
+
     _artifact_cache = {"mtime": None, "content": None}
 
     def _read_artifact() -> str | None:
@@ -45,7 +53,7 @@ def build_conversational_subgraph(
         return _artifact_cache["content"]
 
     def call_model(state: AgentState):
-        messages = [{"role": "system", "content": persona}]
+        messages = [{"role": "system", "content": system_content}]
 
         existing = _read_artifact()
         if existing:

@@ -41,6 +41,9 @@ PROJECT_MANAGER = "phase-6/22-project-manager"
 # Orchestrator
 ORCHESTRATOR = "orchestrator"
 
+# Common prologues
+CONVERSATIONAL_PROTOCOL = "_common/conversational-protocol"
+
 
 @lru_cache
 def load_persona(name: str) -> str:
