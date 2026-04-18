@@ -9,10 +9,10 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 
 from src.agent import graph
-from src.libs.path import AI_WORKSPACE
+from src.libs.path import CHECKPOINT_DB_PATH
 from src.schemas import PostBody
 
-_DB_PATH = Path(os.environ.get("CHECKPOINT_DB", AI_WORKSPACE / "checkpoints.sqlite"))
+_DB_PATH = Path(os.environ.get("CHECKPOINT_DB", CHECKPOINT_DB_PATH))
 
 
 @asynccontextmanager

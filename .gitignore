@@ -2,5 +2,6 @@
 .langgraph_api/
 __pycache__/
 ai-workspace/
+.checkpoints/
 
 .env*
