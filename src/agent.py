@@ -46,7 +46,7 @@ def bridge(state: AgentState):
     )
 
 
-def graph():
+def graph(checkpointer=None):
     builder = StateGraph(AgentState)
 
     subgraph_names = tuple(SUBAGENT_REGISTRY.keys())
@@ -70,4 +70,4 @@ def graph():
         builder.add_edge(name, "review")
     builder.add_edge("review", "orchestrator")
 
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)
