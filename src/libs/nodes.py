@@ -1,5 +1,5 @@
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.types import Command, interrupt
 
@@ -63,6 +63,57 @@ def make_wait_for_user_node(continue_goto: str, exit_goto: str = END):
         )
 
     return wait_for_user
+
+
+def make_approval_gate_node(subagent_names: tuple[str, ...]):
+    """파괴적/중대 tool_call 전에 사용자 승인을 받는 게이트.
+
+    resume payload:
+      - {"type": "approve"}             → 해당 tool 목적지로 진행
+      - {"type": "reject", "message"?}  → ToolMessage로 거절 피드백 주입 + orchestrator 복귀
+    """
+
+    def approval_gate(state: AgentState):
+        last = state["messages"][-1]
+        tc = last.tool_calls[0]
+        tool_name = tc["name"]
+
+        decision = interrupt(
+            {
+                "type": "approval_request",
+                "tool": tool_name,
+                "args": tc.get("args", {}),
+                "options": ["approve", "reject"],
+            }
+        )
+
+        if isinstance(decision, dict) and decision.get("type") == "reject":
+            reason = decision.get("message", "사용자가 승인을 거절했습니다.")
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=f"[승인 거절] {reason}",
+                            tool_call_id=tc["id"],
+                            name=tool_name,
+                        )
+                    ]
+                },
+                goto="orchestrator",
+            )
+
+        # approve → 목적지 결정
+        if tool_name == "reset_project":
+            return Command(goto="reset_project")
+        if tool_name in subagent_names:
+            return Command(
+                update={"_approved_subagents": [tool_name]},
+                goto="bridge",
+            )
+        # 안전망: 알 수 없는 tool이면 orchestrator로
+        return Command(goto="orchestrator")
+
+    return approval_gate
 
 
 def review(state: AgentState):

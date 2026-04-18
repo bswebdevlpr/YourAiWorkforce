@@ -4,7 +4,7 @@ from langgraph.types import Command
 
 from src.config import MODEL_NAME_DEFAULT
 from src.libs.model import create_chat_model
-from src.libs.nodes import review
+from src.libs.nodes import make_approval_gate_node, review
 from src.libs.persona import ORCHESTRATOR, load_persona
 from src.state import AgentState
 from src.subagents import ALL_TOOLS, SUBAGENT_REGISTRY
@@ -24,10 +24,13 @@ def route(state: AgentState):
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.tool_calls:
         name = last.tool_calls[0]["name"]
+        approved = state.get("_approved_subagents") or []
         if name == "reset_project":
-            return "reset_project"
+            return "approval_gate"
         if name in SUBAGENT_REGISTRY:
-            return name
+            if name in approved:
+                return name  # bridge 직행
+            return "approval_gate"
     return END
 
 
@@ -55,6 +58,11 @@ def graph(checkpointer=None):
     builder.add_node("bridge", bridge, destinations=(*subgraph_names, "orchestrator"))
     builder.add_node("review", review, destinations=(*subgraph_names, "orchestrator"))
     builder.add_node("reset_project", reset_project)
+    builder.add_node(
+        "approval_gate",
+        make_approval_gate_node(subgraph_names),
+        destinations=("bridge", "reset_project", "orchestrator"),
+    )
     for name, spec in SUBAGENT_REGISTRY.items():
         builder.add_node(name, spec.graph)
 
@@ -63,7 +71,7 @@ def graph(checkpointer=None):
         "orchestrator",
         route,
         {name: "bridge" for name in SUBAGENT_REGISTRY}
-        | {"reset_project": "reset_project", END: END},
+        | {"approval_gate": "approval_gate", "reset_project": "reset_project", END: END},
     )
     builder.add_edge("reset_project", "orchestrator")
     for name in SUBAGENT_REGISTRY:
