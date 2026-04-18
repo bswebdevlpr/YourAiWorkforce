@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, AsyncGenerator
 
-from fastapi import Body, FastAPI
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
@@ -28,18 +28,7 @@ app = FastAPI(
 )
 
 
-async def generate_chat_responses(body: PostBody) -> AsyncGenerator[str, None]:
-    agent = app.state.agent
-    config = {"configurable": {"thread_id": body.thread_id}}
-
-    snapshot = await agent.aget_state(config)
-    is_interrupted = bool(snapshot.next)
-
-    if is_interrupted:
-        input_ = Command(resume={"type": body.type, "message": body.message})
-    else:
-        input_ = {"messages": [("user", body.message)]}
-
+async def generate_chat_responses(agent, config, input_) -> AsyncGenerator[str, None]:
     async for chunk, _ in agent.astream(input_, config=config, stream_mode="messages"):
         content = str(chunk.content or "").strip()
         if content:
@@ -48,6 +37,23 @@ async def generate_chat_responses(body: PostBody) -> AsyncGenerator[str, None]:
 
 @app.post("/")
 async def root(body: Annotated[PostBody, Body(description="유저 입력")]):
+    agent = app.state.agent
+    config = {"configurable": {"thread_id": body.thread_id}}
+
+    snapshot = await agent.aget_state(config)
+    is_interrupted = bool(snapshot.next)
+
+    if not is_interrupted and body.type != "message":
+        raise HTTPException(
+            status_code=400, detail="fresh thread requires type='message'"
+        )
+
+    if is_interrupted:
+        input_ = Command(resume={"type": body.type, "message": body.message})
+    else:
+        input_ = {"messages": [("user", body.message)]}
+
     return StreamingResponse(
-        generate_chat_responses(body), media_type="text/event-stream"
+        generate_chat_responses(agent, config, input_),
+        media_type="text/event-stream",
     )
