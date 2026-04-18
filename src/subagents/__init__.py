@@ -1,13 +1,14 @@
 from src.subagents.planners import planner_graphs
+from src.subagents.spec import SubagentSpec
 
-SUBAGENT_REGISTRY = {**planner_graphs}
+SUBAGENT_REGISTRY: dict[str, SubagentSpec] = {**planner_graphs}
 
 SUBAGENT_TOOLS = [
     {
         "type": "function",
         "function": {
             "name": name,
-            "description": desc,
+            "description": spec.description,
             "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string", "description": "사용자 요청 내용"}},
@@ -15,7 +16,7 @@ SUBAGENT_TOOLS = [
             },
         },
     }
-    for name, (_, desc, _) in SUBAGENT_REGISTRY.items()
+    for name, spec in SUBAGENT_REGISTRY.items()
 ]
 
 UTILITY_TOOLS = [

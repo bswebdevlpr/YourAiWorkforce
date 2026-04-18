@@ -1,3 +1,5 @@
+from langchain_core.tools import tool
+
 from src.libs.path import PRD_PATH, ROOT
 
 PRD_REQUIRED_SECTIONS = [
@@ -19,13 +21,17 @@ def _validate_prd(content: str) -> list[str]:
     return missing
 
 
+@tool("save_prd", description="PRD를 작성한 경우 파일을 저장하기 위해 사용")
 def save_prd(content: str) -> str:
     """PRD를 검증 후 파일로 저장한다."""
     missing = _validate_prd(content)
     if missing:
         return f"PRD 저장 실패. 누락된 섹션: {', '.join(missing)}"
 
-    PRD_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PRD_PATH.write_text(content, encoding="utf-8")
+    try:
+        PRD_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PRD_PATH.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        return f"PRD 저장 실패. 파일 쓰기 오류: {exc}"
 
     return f"PRD 저장 완료: {PRD_PATH.relative_to(ROOT)}"
