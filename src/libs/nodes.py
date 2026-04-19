@@ -31,10 +31,10 @@ def make_wait_for_user_node(continue_goto: str, exit_goto: str = END):
     """서브그래프 내부에서 유저 입력을 받는 노드.
 
     resume payload 컨벤션:
-      - {"type": "complete"}             → exit_goto (루프 종료)
-      - {"type": "reject", "message"?}   → exit_goto (중단 맥락 첨부)
-      - {"type": "message", "message"}   → continue_goto (루프 지속)
-      - 그 외 dict/문자열                → continue_goto (message로 폴백)
+      - {"type": "reply", "message": "..."}    → continue_goto (대화 이어감)
+      - {"type": "complete"}                   → exit_goto (작업 완료 종료)
+      - {"type": "reject", "message"?}         → exit_goto (중단 맥락 첨부)
+    그 외 type/형식은 오류로 처리하여 model 노드에 돌려보낸다.
     """
 
     def wait_for_user(state: AgentState):
@@ -43,22 +43,47 @@ def make_wait_for_user_node(continue_goto: str, exit_goto: str = END):
             {"result": last, "options": ["reply", "complete", "reject"]}
         )
 
-        if isinstance(decision, dict):
-            dtype = decision.get("type")
-            if dtype == "complete":
-                return Command(goto=exit_goto)
-            if dtype == "reject":
-                reason = decision.get("message", "사용자가 작업을 중단했습니다.")
-                return Command(
-                    update={"messages": [AIMessage(content=f"[작업 중단] {reason}")]},
-                    goto=exit_goto,
-                )
+        if not isinstance(decision, dict):
+            return Command(
+                update={
+                    "messages": [
+                        AIMessage(
+                            content=(
+                                f"[잘못된 resume payload] dict가 아닌 값이 전달됨: {decision!r}"
+                            )
+                        )
+                    ]
+                },
+                goto=continue_goto,
+            )
+
+        dtype = decision.get("type")
+        if dtype == "complete":
+            return Command(goto=exit_goto)
+        if dtype == "reject":
+            reason = decision.get("message", "사용자가 작업을 중단했습니다.")
+            return Command(
+                update={"messages": [AIMessage(content=f"[작업 중단] {reason}")]},
+                goto=exit_goto,
+            )
+        if dtype == "reply":
             text = decision.get("message", "")
-        else:
-            text = str(decision)
+            return Command(
+                update={"messages": [HumanMessage(content=text)]},
+                goto=continue_goto,
+            )
 
         return Command(
-            update={"messages": [HumanMessage(content=text)]},
+            update={
+                "messages": [
+                    AIMessage(
+                        content=(
+                            f"[알 수 없는 resume type: {dtype!r}] "
+                            f"허용: reply/complete/reject. payload={decision!r}"
+                        )
+                    )
+                ]
+            },
             goto=continue_goto,
         )
 
@@ -71,6 +96,7 @@ def make_approval_gate_node(subagent_names: tuple[str, ...]):
     resume payload:
       - {"type": "approve"}             → 해당 tool 목적지로 진행
       - {"type": "reject", "message"?}  → ToolMessage로 거절 피드백 주입 + orchestrator 복귀
+    그 외 payload는 안전을 위해 reject와 동일하게 취급한다.
     """
 
     def approval_gate(state: AgentState):
@@ -87,8 +113,13 @@ def make_approval_gate_node(subagent_names: tuple[str, ...]):
             }
         )
 
-        if isinstance(decision, dict) and decision.get("type") == "reject":
-            reason = decision.get("message", "사용자가 승인을 거절했습니다.")
+        dtype = decision.get("type") if isinstance(decision, dict) else None
+        if dtype != "approve":
+            reason = (
+                decision.get("message", "사용자가 승인을 거절했습니다.")
+                if isinstance(decision, dict)
+                else f"잘못된 승인 payload: {decision!r}"
+            )
             return Command(
                 update={
                     "messages": [
@@ -102,7 +133,6 @@ def make_approval_gate_node(subagent_names: tuple[str, ...]):
                 goto="orchestrator",
             )
 
-        # approve → 목적지 결정
         if tool_name == "reset_project":
             return Command(goto="reset_project")
         if tool_name in subagent_names:
@@ -110,14 +140,19 @@ def make_approval_gate_node(subagent_names: tuple[str, ...]):
                 update={"_approved_subagents": [tool_name]},
                 goto="bridge",
             )
-        # 안전망: 알 수 없는 tool이면 orchestrator로
         return Command(goto="orchestrator")
 
     return approval_gate
 
 
 def review(state: AgentState):
-    """외부 그래프에서 산출물을 사용자에게 최종 확인받는 노드."""
+    """외부 그래프에서 산출물을 사용자에게 최종 확인받는 노드.
+
+    resume payload:
+      - {"type": "approve"}            → 통과
+      - {"type": "reject", "message"?} → 직전 subgraph로 피드백과 함께 복귀
+    그 외 payload는 안전을 위해 reject로 취급한다.
+    """
     last_content = state["messages"][-1].content
     decision = interrupt(
         {
@@ -125,10 +160,16 @@ def review(state: AgentState):
             "options": ["approve", "reject"],
         }
     )
-    if isinstance(decision, dict) and decision.get("type") == "reject":
-        feedback = decision.get("message", "다시 작업해주세요.")
-        return Command(
-            update={"messages": [HumanMessage(content=feedback)]},
-            goto=state.get("_last_subgraph") or END,
-        )
-    return state
+    dtype = decision.get("type") if isinstance(decision, dict) else None
+    if dtype == "approve":
+        return state
+
+    feedback = (
+        decision.get("message", "다시 작업해주세요.")
+        if isinstance(decision, dict)
+        else f"잘못된 resume payload: {decision!r}"
+    )
+    return Command(
+        update={"messages": [HumanMessage(content=feedback)]},
+        goto=state.get("_last_subgraph") or END,
+    )
