@@ -11,7 +11,11 @@ SUBAGENT_TOOLS = [
             "description": spec.description,
             "parameters": {
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "사용자 요청 내용"}},
+                "properties": {
+                    "query": {"type": "string", "description": "이번 작업의 핵심 요청. 대표님이 방금 말씀하신 의도를 한 문장으로 정리."},
+                    "context_hints": {"type": "string", "description": "이번 작업에 참고할 결정사항/제약/배경 맥락 요약. 직전 대화에서 드러난 선호/방향/제약을 한두 단락으로 정리. 없으면 빈 문자열."},
+                    "artifact_refs": {"type": "array", "items": {"type": "string"}, "description": "이번 작업에 참고할 산출물 파일 경로 목록 (예: ai-workspace/specs/prd.md). 없으면 빈 배열."},
+                },
                 "required": ["query"],
             },
         },
