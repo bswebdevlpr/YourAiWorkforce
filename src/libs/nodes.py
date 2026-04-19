@@ -149,9 +149,9 @@ def review(state: AgentState):
     """외부 그래프에서 산출물을 사용자에게 최종 확인받는 노드.
 
     resume payload:
-      - {"type": "approve"}            → 통과
-      - {"type": "reject", "message"?} → 직전 subgraph로 피드백과 함께 복귀
-    그 외 payload는 안전을 위해 reject로 취급한다.
+      - {"type": "approve"}            → 통과 (orchestrator로 복귀)
+      - {"type": "reject", "message"?} → 피드백을 parent messages에 주입 후 orchestrator로 복귀
+    그 외 payload는 안전을 위해 reject로 취급한다. orchestrator가 피드백을 보고 재호출 여부를 결정한다.
     """
     last_content = state["messages"][-1].content
     decision = interrupt(
@@ -169,7 +169,12 @@ def review(state: AgentState):
         if isinstance(decision, dict)
         else f"잘못된 resume payload: {decision!r}"
     )
+    target = state.get("_last_subgraph") or "담당 포지션"
     return Command(
-        update={"messages": [HumanMessage(content=feedback)]},
-        goto=state.get("_last_subgraph") or END,
+        update={
+            "messages": [
+                HumanMessage(content=f"[{target} 재작업 요청] {feedback}")
+            ]
+        },
+        goto="orchestrator",
     )

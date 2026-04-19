@@ -7,7 +7,7 @@ from langgraph.graph import END, START, StateGraph
 
 from src.libs.nodes import make_check_done_node, make_wait_for_user_node
 from src.libs.persona import CONVERSATIONAL_PROTOCOL, load_persona
-from src.state import AgentState
+from src.subagents.state import SubagentState
 
 _UNSET = object()
 
@@ -53,7 +53,7 @@ def build_conversational_subgraph(
             _artifact_cache["content"] = artifact_path.read_text(encoding="utf-8")
         return _artifact_cache["content"]
 
-    def call_model(state: AgentState):
+    def call_model(state: SubagentState):
         messages = [{"role": "system", "content": system_content}]
 
         existing = _read_artifact()
@@ -69,7 +69,7 @@ def build_conversational_subgraph(
         response = bound_model.invoke(messages)
         return {"messages": [response]}
 
-    def call_save(state: AgentState):
+    def call_save(state: SubagentState):
         last = state["messages"][-1]
         tool_call = next(
             (tc for tc in last.tool_calls if tc["name"] == save_tool_name),
@@ -91,27 +91,27 @@ def build_conversational_subgraph(
             ]
         }
 
-    def route_after_model(state: AgentState):
+    def route_after_model(state: SubagentState):
         last = state["messages"][-1]
         if isinstance(last, AIMessage) and last.tool_calls:
             if any(tc["name"] == save_tool_name for tc in last.tool_calls):
                 return "save"
         return "wait_for_user"
 
-    def route_after_save(state: AgentState):
+    def route_after_save(state: SubagentState):
         last = state["messages"][-1]
         content = getattr(last, "content", "") or ""
         if "실패" in content:
             return "model"
         return "check_done"
 
-    def route_after_done(state: AgentState):
+    def route_after_done(state: SubagentState):
         return END if state.get("is_done", True) else "wait_for_user"
 
     check_done = make_check_done_node(model)
     wait_for_user = make_wait_for_user_node(continue_goto="model", exit_goto=END)
 
-    builder = StateGraph(AgentState)
+    builder = StateGraph(SubagentState)
     builder.add_node("model", call_model)
     builder.add_node("save", call_save)
     builder.add_node("check_done", check_done)

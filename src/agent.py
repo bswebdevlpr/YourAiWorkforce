@@ -1,4 +1,4 @@
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
@@ -12,6 +12,35 @@ from src.tools import reset_project
 
 _model = create_chat_model(MODEL_NAME_DEFAULT).bind_tools(ALL_TOOLS)
 _system_prompt = load_persona(ORCHESTRATOR)
+
+_SUBAGENT_GRAPHS: dict = {}
+
+
+def _get_subagent(name: str):
+    if name not in _SUBAGENT_GRAPHS:
+        _SUBAGENT_GRAPHS[name] = SUBAGENT_REGISTRY[name].graph_factory(None)
+    return _SUBAGENT_GRAPHS[name]
+
+
+def _compose_brief(args: dict) -> str:
+    query = (args.get("query") or "").strip()
+    hints = (args.get("context_hints") or "").strip()
+    refs = args.get("artifact_refs") or []
+
+    parts = [f"## 이번 작업 목표\n{query}"]
+    if hints:
+        parts.append(f"## 고려할 맥락\n{hints}")
+    if refs:
+        parts.append("## 참고 산출물\n" + "\n".join(f"- {r}" for r in refs))
+    return "\n\n".join(parts)
+
+
+def _summarize_for_parent(name: str, sub_messages: list) -> str:
+    last = sub_messages[-1] if sub_messages else None
+    text = getattr(last, "content", "") if last else ""
+    text = str(text or "").strip()
+    truncated = text[:200] + ("..." if len(text) > 200 else "")
+    return f"[{name} 완료]\n{truncated}" if truncated else f"[{name} 완료]"
 
 
 def orchestrator(state: AgentState):
@@ -27,7 +56,7 @@ def route(state: AgentState):
         if name == "reset_project":
             return "approval_gate"
         if name in SUBAGENT_REGISTRY:
-            return name
+            return "bridge"
     return END
 
 
@@ -38,41 +67,52 @@ def bridge(state: AgentState):
 
     tc = last.tool_calls[0]
     target = tc["name"]
-    query = tc["args"].get("query", "")
+    if target not in SUBAGENT_REGISTRY:
+        return state
 
+    brief = _compose_brief(tc.get("args") or {})
+    subgraph = _get_subagent(target)
+
+    try:
+        result = subgraph.invoke({"messages": [HumanMessage(content=brief)]})
+        summary = _summarize_for_parent(target, result.get("messages") or [])
+    except Exception as exc:
+        summary = f"[{target} 실행 실패] {exc}"
+
+    tool_msg = ToolMessage(content=summary, tool_call_id=tc["id"], name=target)
     return Command(
-        update={"messages": [HumanMessage(content=query)], "_last_subgraph": target},
-        goto=target,
+        update={"messages": [tool_msg], "_last_subgraph": target},
+        goto="review",
     )
 
 
 def _build():
     builder = StateGraph(AgentState)
 
-    subgraph_names = tuple(SUBAGENT_REGISTRY.keys())
+    subagent_names = tuple(SUBAGENT_REGISTRY.keys())
 
     builder.add_node("orchestrator", orchestrator)
-    builder.add_node("bridge", bridge, destinations=(*subgraph_names, "orchestrator"))
-    builder.add_node("review", review, destinations=(*subgraph_names, "orchestrator"))
+    builder.add_node("bridge", bridge, destinations=("review", "orchestrator"))
+    builder.add_node("review", review, destinations=("orchestrator",))
     builder.add_node("reset_project", reset_project)
     builder.add_node(
         "approval_gate",
-        make_approval_gate_node(subgraph_names),
+        make_approval_gate_node(subagent_names),
         destinations=("bridge", "reset_project", "orchestrator"),
     )
-    for name, spec in SUBAGENT_REGISTRY.items():
-        builder.add_node(name, spec.graph_factory(None))
 
     builder.add_edge(START, "orchestrator")
     builder.add_conditional_edges(
         "orchestrator",
         route,
-        {name: "bridge" for name in SUBAGENT_REGISTRY}
-        | {"approval_gate": "approval_gate", "reset_project": "reset_project", END: END},
+        {
+            "bridge": "bridge",
+            "approval_gate": "approval_gate",
+            "reset_project": "reset_project",
+            END: END,
+        },
     )
     builder.add_edge("reset_project", "orchestrator")
-    for name in SUBAGENT_REGISTRY:
-        builder.add_edge(name, "review")
     builder.add_edge("review", "orchestrator")
 
     return builder
