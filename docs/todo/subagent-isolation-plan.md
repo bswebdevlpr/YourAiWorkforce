@@ -2,36 +2,46 @@
 
 ## 배경 및 목표
 
-현재: parent 그래프의 단일 AsyncSqliteSaver가 서브그래프에도 전파 → 모든 대화가 parent thread 하나에 누적. 서브에이전트 간 state 공유로 역할 경계 흐려짐, 토큰 낭비.
+현재: parent 그래프의 단일 AsyncSqliteSaver가 서브그래프에도 전파 → 모든 대화가 parent thread 하나에 누적. 서브에이전트 간 state 공유로 역할 경계 흐려짐, 토큰 낭비. 게다가 LangGraph 1.1.2 Studio에서 subgraph resume이 task ID 해시 불일치로 무음 실패하는 버그 관측됨.
 
-목표:
-1. 각 서브에이전트가 독립 thread_id 네임스페이스 + 영속 memory
-2. Orchestrator만 전체 맥락 보관, 서브에이전트에는 "브리핑 패킷"만 전달
-3. **Cross-subagent consultation** 지원 (방식 A: 단발 Q&A 중계)
-4. 장기: **Meeting mode** (방식 B: 다자 대화)
+**Phase B1 목표 (이번 착수 범위)**:
+1. **서브에이전트 messages 격리** (state schema 분리) ← 핵심
+2. Orchestrator만 전체 맥락 보관, 서브에이전트에는 **브리핑 패킷만** 전달
+3. 중복 주입 / cross-talk 문제 해소
+
+**Phase B2/B3 목표 (이연)**:
+- 독립 thread_id + 재진입 시 과거 대화 자동 복원 → Phase B2에서 재평가
+- Cross-subagent consultation (방식 A) → Phase B2
+- Meeting mode (방식 B) → Phase B3 (수요 확인 후)
+
+> **Option A (외부 ainvoke + 수동 interrupt passthrough) → Option B (state schema 분리)로 전환**
+> 이유: LangGraph 1.1.2 subgraph resume 버그 확인 직후, 수동 passthrough도 같은 저수준에 의존. Option B는 LangGraph의 기본 interrupt 전파 경로를 유지하면서 핵심 요구(messages 격리)를 달성.
 
 ---
 
-## 설계 결정 (확정)
+## 설계 결정 (확정 — Option B)
 
 | 쟁점 | 결정 | 근거 |
 |---|---|---|
-| 1. 체크포인터 분리 | **단일 sqlite + 다른 thread_id** | 운영 단순. 단일 AsyncSqliteSaver를 parent + 모든 subagent가 공유, thread_id만 다르게 |
-| 2. 서브그래프 호출 구조 | **bridge 노드가 외부 ainvoke** | subgraph를 parent 노드에서 제거. state 완전 격리 |
-| 3. 브리핑 생성 방식 | **템플릿 기반** | tool schema 확장으로 orchestrator LLM이 직접 구성. LLM 요약은 추후 업그레이드 |
-| 4. Interrupt 라우팅 | **parent bridge가 interrupt passthrough** | bridge가 subgraph astream 중 interrupt 감지 → parent도 `interrupt()`로 pause |
-| 5. 재진입 thread 복원 | **parent state `_subagent_threads` registry** | dict[str, str] (name → thread_id). 새 호출=uuid4, 재호출=기존 |
-| 6. 반환값 병합 | **요약 ToolMessage만 parent로** | subgraph last AIMessage 내용 + artifact 경로만 parent messages에 기록 |
+| 1. 체크포인터 분리 | **Phase B1에선 단일 thread 유지** | Option B는 parent와 subgraph가 같은 thread, `checkpoint_ns`로 네임스페이스만 분리. 독립 thread는 Phase B2로 이연 |
+| 2. 서브그래프 호출 구조 | **subgraph를 parent 노드로 유지 + state schema 분리** | `SubagentState` 별도 TypedDict 정의. LangGraph input/output transformer로 parent↔subgraph 데이터 변환 |
+| 3. 브리핑 생성 방식 | **템플릿 기반** | tool schema 확장으로 orchestrator LLM이 직접 구성 (`query`/`context_hints`/`artifact_refs`) |
+| 4. Interrupt 라우팅 | **LangGraph 자동 전파 활용** | subgraph interrupt → parent로 자동 올라옴. 수동 passthrough 불필요 |
+| 5. 재진입 thread 복원 | **Phase B1에선 근사 복원** | parent messages 중 해당 subagent 구간을 transformer가 subgraph input으로 되살림. 완전 복원은 Phase B2에서 독립 thread 도입과 함께 |
+| 6. 반환값 병합 | **요약 ToolMessage만 parent로** | subgraph output transformer에서 last AIMessage 요약만 parent messages에 기록. 중간 대화는 subgraph namespace에만 체류 |
 
 ---
 
 ## Phase 분할 (스코프 재조정)
 
-### Phase B1 — MVP (이번 착수)
-독립 thread + 브리핑 + interrupt passthrough. 여기까지 돌아가면 사용자 요구의 80% 해결.
+### Phase B1 — MVP (이번 착수, Option B)
+State schema 분리 + 브리핑 템플릿. LangGraph 기본 interrupt 전파 활용. 핵심 요구인 "messages 격리 / 중복 주입 해소"를 안전하게 달성.
 
-### Phase B2 — 방식 A (consult)
-서브에이전트 간 단발 Q&A 중계. Phase B1 운영 확인 후 착수.
+### Phase B2 — 독립 thread + 방식 A (consult)
+Phase B1 운영 확인 후:
+- LangGraph 버전 업데이트(1.2+) 시 subgraph resume 안정성 재평가
+- 독립 thread_id 도입 (재진입 시 자동 복원)
+- `consult_subagent` tool로 서브에이전트 간 단발 Q&A 중계
 
 ### Phase B3 — 방식 B (meeting mode)
 다자 대화 모드. **Phase B2 운영 2~3주 후 실제 수요 재평가 후 결정**. 안 쓰면 스킵.
@@ -73,48 +83,60 @@ Memory 요약/압축, Observability 강화.
   - 기존 `.graph` 참조 전수조사 필요
 - **선행**: 없음 (Task 1/2와 병렬)
 
-#### Task 4: Bridge 노드 재구성 — 핵심 `[L3 / opus, 메인 직접]`
-- **파일**: `src/agent.py` (bridge 재작성), `src/libs/nodes.py` (helper)
-- **내용**:
-  1. async 노드로 변경
-  2. tool_call args에서 `query/context_hints/artifact_refs` 추출 → 브리핑 HumanMessage 템플릿
-  3. `_subagent_threads.get(name)` 조회, 없으면 `uuid4()` 발급
-  4. `app.state.subagents[name].ainvoke(..., config={"configurable": {"thread_id": sub_tid}})` 호출
-     - 첫 호출/완료 후 재호출: 새 input 주입
-     - `_active_subagent_thread == sub_tid`: `Command(resume=payload)` 주입
-  5. 결과 분기:
-     - interrupt로 끝: parent에서 `interrupt()` 호출 → pause
-     - `is_done=True`: last AIMessage 요약 → `ToolMessage(tool_call_id=...)` parent 추가 → clear active → goto=review
-- **⚠ Fallback 전략 (명시 필수)**:
-  - 외부 ainvoke + 수동 interrupt passthrough가 LangGraph 1.1.2에서 안정적이지 않으면
-  - **"subgraph를 parent 노드로 유지 + state schema 분리"** 로 축소 (state 격리만 달성, thread 독립 포기)
-  - feature 브랜치로 격리하여 실패 시 롤백 쉽게
-- **선행**: Task 1, Task 3
+#### Task 4: State schema 분리 + transformer 구현 — 핵심 `[L3 / opus, 메인 직접]`
+- **파일**: 신규 `src/subagents/state.py`, `src/libs/subgraph.py` 수정, `src/agent.py` (bridge 재작성)
+- **설계 방향**: subgraph를 parent 노드로 유지하되 state schema를 완전히 분리. bridge 노드가 parent state → subgraph input 변환 + subgraph output → parent 병합을 모두 담당.
+
+**세부 작업**:
+1. **`SubagentState` TypedDict 신규 정의** (`src/subagents/state.py` 또는 `src/libs/subgraph.py`)
+   ```python
+   class SubagentState(TypedDict, total=False):
+       messages: Annotated[list, add_messages]
+       is_done: bool
+   ```
+   - parent의 `_last_subgraph`, `_approved_subagents`, `_subagent_threads` 등은 **포함 안 함** → subagent가 볼 수 없음
+
+2. **`build_conversational_subgraph` 수정**: `StateGraph(SubagentState)`로 변경. 내부 call_model/wait_for_user/check_done 등 노드가 `SubagentState`만 다루도록 타입 조정.
+
+3. **bridge 노드 재작성** (`src/agent.py`):
+   - **input transform**: tool_call args에서 `query`/`context_hints`/`artifact_refs` 추출 → 3섹션 브리핑 HumanMessage 구성
+   - **subgraph 호출**: `subgraph.invoke({"messages": [brief_msg]}, config)` — parent config 상속, LangGraph가 `checkpoint_ns`로 subgraph 상태를 자동 분리. interrupt는 LangGraph가 parent로 자동 전파
+   - **output transform**: subgraph 결과의 last AIMessage에서 요약 추출 → `ToolMessage(tool_call_id=..., content="[{name} 완료]\n산출물: {path}\n{text[:200]}...")`로 parent messages에 추가
+   - `goto="review"` 로 parent 다음 노드 지정
+
+4. **기존 `add_node(name, spec.graph_factory(None))` 제거**: subagent는 bridge가 내부 invoke만 하므로 parent의 별도 노드로 둘 필요 없음. 단, LangGraph 패턴에 따라 compiled subgraph는 bridge 내부에서 참조 가능하도록 module-level 또는 closure로 보관
+
+5. **에러 처리**: subgraph invoke 중 예외 시 `ToolMessage(content=f"[{name} 실행 실패] {exc}")` 로 parent에 기록하고 orchestrator로 복귀
+
+- **Option B 이점**: LangGraph 1.1.2의 기본 interrupt 전파 경로를 그대로 사용 → 수동 passthrough 불필요, Studio resume 버그와 무관한 영역
+- **선행**: Task 1, Task 2, Task 3 (모두 완료)
 
 #### Task 5: Parent 그래프 배선 정리 `[L2 / sonnet]`
 - **파일**: `src/agent.py`
 - **내용**:
-  - `graph()` 에서 `for name, spec in SUBAGENT_REGISTRY.items(): builder.add_node(name, spec.graph)` 제거
+  - `graph()` / `_build()` 에서 `for name, spec in SUBAGENT_REGISTRY.items(): builder.add_node(name, spec.graph_factory(None))` 제거 (Task 4에서 이미 했으면 skip)
   - `builder.add_edge(name, "review")` 루프 제거 → bridge가 완료 시 직접 review로 goto
-  - conditional_edges 단순화
-  - approval_gate는 유지 (승인 시 Command update에 thread 등록은 bridge 위임)
+  - conditional_edges 단순화: orchestrator → bridge (subagent 이름별 매핑이 아니라 단일 bridge 노드로)
+  - approval_gate는 유지 (reset_project 게이트용)
 - **선행**: Task 4
 
-#### Task 6: main.py resume 라우팅 보강 `[L2 / sonnet]`
-- **파일**: `src/main.py`
+#### Task 6: main.py / 전체 검증 `[L2 / sonnet]`
+- **파일**: `src/main.py` (영향 적음), 필요 시 간단 TestClient 스크립트
 - **내용**:
-  - parent snapshot.values에 `_active_subagent`가 있는데 `type="new"`면 400
-  - 그 외 기존 로직 유지 (parent에만 resume 전달, bridge 내부 passthrough)
-  - TestClient 시나리오 검증
+  - Option B는 parent thread 하나에 모든 resume이 집중됨 → `main.py`의 기존 resume 로직 그대로 동작 예상. 변경 최소
+  - TestClient 시나리오 2~3개로 end-to-end 동작 확인
+    - product_discovery 호출 → interrupt → reply → 완료
+    - subagent messages가 parent에 full text로 섞이지 않고 요약만 병합되는지 확인
+    - reset_project 이후 동작
 - **선행**: Task 5
 
 #### 🔍 Task 6.5: E2E 검증 체크포인트
 - **내용**: Task 6 이후 다음 시나리오 수동 검증 후 커밋 고정
   - 서브에이전트 첫 호출 → interrupt → resume → 완료
-  - 같은 서브에이전트 재호출 시 기존 thread 복원 확인
-  - 서로 다른 서브에이전트 호출 시 state 격리 확인
-  - reset_project 이후 동작
-  - type="new" → 새 thread
+  - 완료 후 parent messages에 요약 ToolMessage만 들어있고 subagent 중간 대화는 안 섞여있는지 LangSmith 트레이스로 확인
+  - Orchestrator가 동일 subagent 재호출 시 parent의 요약만 보이는지
+  - reset_project 이후 clean 상태에서 처음부터 동작
+  - 중복 HumanMessage 주입 사라졌는지 (Option A 원래 목적 중 하나)
 - **선행**: Task 6
 
 ---
@@ -175,14 +197,15 @@ Phase B3:   Task 8 (L3) — 수요 재확인 후
 
 ---
 
-## 리스크 및 대응
+## 리스크 및 대응 (Option B 기준)
 
 | 리스크 | 영향 | 대응 |
 |---|---|---|
-| **Task 4 interrupt passthrough 실패** | 전체 blocker | Fallback: parent 노드 유지 + state schema 분리로 축소 |
-| **SUBAGENT_REGISTRY `.graph` 기존 참조** | Task 3 영향 | 착수 전 grep 전수조사 |
+| **LangGraph state schema 전환 시 타입 에러** | Task 4 blocker | SubagentState를 최소 필드로 시작, invoke 경로 먼저 동작 확인 후 확장 |
+| **input/output transformer 누락으로 parent messages 오염** | 중간 대화가 parent로 새어나감 | Task 4에서 bridge의 output transform을 명시적으로 last AIMessage 요약만 추출 |
 | **Memory 누적 → context 초과** | 장기 | Phase B4 압축 전략 |
-| **subagent ainvoke 실패 처리 미정의** | 런타임 에러 | Task 4에 에러 복구 로직 포함 |
+| **재진입 시 과거 대화 복원 미흡** | UX 저하 | Phase B1에선 브리핑 의존, Phase B2 독립 thread로 해결 |
+| **subagent invoke 실패 처리 미정의** | 런타임 에러 | Task 4에 try/except + ToolMessage("[실행 실패] ...") 반환 로직 포함 |
 
 ---
 
@@ -230,15 +253,21 @@ Phase B3:   Task 8 (L3) — 수요 재확인 후
 ## 진행 상태
 
 - [x] Phase B1 착수 전 합의 3건 (확정)
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-- [ ] Task 4 (fallback 대비)
-- [ ] Task 5
-- [ ] Task 6
-- [ ] Task 6.5 검증
-- [ ] Phase B2 착수 결정
-- [ ] Task 7
-- [ ] Phase B3 착수 결정
-- [ ] Task 8
+- [x] **Option A → Option B 전환 결정** (state schema 분리 방식 채택)
+- [x] Task 1 (State 필드 추가) — 커밋 669ea2b
+- [x] Task 2 (Tool schema 확장) — 커밋 fb32808
+- [x] Task 3 (Subgraph factory) — 커밋 9a20cfa
+- [ ] Task 4 (State schema 분리 + transformer)
+- [ ] Task 5 (배선 정리)
+- [ ] Task 6 (main.py 검증)
+- [ ] Task 6.5 E2E 검증
+- [ ] Phase B2 착수 결정 (독립 thread + consult)
+- [ ] Task 7 (consult)
+- [ ] Phase B3 착수 결정 (meeting)
+- [ ] Task 8 (meeting)
 - [ ] Phase B4 (memory, observability)
+
+### Task 1~3 유산 취급 (Option B 하에서)
+- `_subagent_threads`, `_active_subagent`, `_active_subagent_thread` 필드 — **Phase B2 대비로 예약**. Phase B1에선 미사용
+- `context_hints`, `artifact_refs` tool schema 확장 — **즉시 사용** (Task 4 브리핑 템플릿 구성 시)
+- `graph_factory` 패턴 — **즉시 사용** (Task 4에서 bridge가 내부 invoke할 때 factory로 compile)
