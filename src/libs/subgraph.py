@@ -20,6 +20,7 @@ def build_conversational_subgraph(
     artifact_path: Path | None = None,
     existing_hint: str = "기존 산출물이 있다. 피드백이 있으면 해당 부분만 수정하고, 전체를 다시 작성하지 마라.",
     prologue: str | None = _UNSET,  # type: ignore[assignment]
+    checkpointer=None,
 ):
     """내부 루프형 대화 서브그래프 빌더.
 
@@ -133,4 +134,4 @@ def build_conversational_subgraph(
         {"wait_for_user": "wait_for_user", END: END},
     )
 
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)

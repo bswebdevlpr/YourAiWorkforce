@@ -61,7 +61,7 @@ def _build():
         destinations=("bridge", "reset_project", "orchestrator"),
     )
     for name, spec in SUBAGENT_REGISTRY.items():
-        builder.add_node(name, spec.graph)
+        builder.add_node(name, spec.graph_factory(None))
 
     builder.add_edge(START, "orchestrator")
     builder.add_conditional_edges(
