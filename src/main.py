@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 
-from src.agent import graph
+from src.agent import graph_with_checkpointer
 from src.libs.path import CHECKPOINT_DB_PATH
 from src.schemas import PostBody
 
@@ -19,7 +19,7 @@ _DB_PATH = Path(os.environ.get("CHECKPOINT_DB", CHECKPOINT_DB_PATH))
 async def lifespan(app: FastAPI):
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     async with AsyncSqliteSaver.from_conn_string(str(_DB_PATH)) as checkpointer:
-        app.state.agent = graph(checkpointer=checkpointer)
+        app.state.agent = graph_with_checkpointer(checkpointer)
         yield
 
 
@@ -52,7 +52,7 @@ async def root(body: Annotated[PostBody, Body(description="유저 입력")]):
             )
         input_ = {"messages": [("user", body.message)]}
     elif is_interrupted:
-        if body.type not in ("message", "complete", "reject", "approve"):
+        if body.type not in ("message", "reply", "complete", "reject", "approve"):
             raise HTTPException(
                 status_code=400,
                 detail=f"invalid type '{body.type}' for interrupted thread",

@@ -24,13 +24,10 @@ def route(state: AgentState):
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.tool_calls:
         name = last.tool_calls[0]["name"]
-        approved = state.get("_approved_subagents") or []
         if name == "reset_project":
             return "approval_gate"
         if name in SUBAGENT_REGISTRY:
-            if name in approved:
-                return name  # bridge 직행
-            return "approval_gate"
+            return name
     return END
 
 
@@ -49,7 +46,7 @@ def bridge(state: AgentState):
     )
 
 
-def graph(checkpointer=None):
+def _build():
     builder = StateGraph(AgentState)
 
     subgraph_names = tuple(SUBAGENT_REGISTRY.keys())
@@ -78,4 +75,14 @@ def graph(checkpointer=None):
         builder.add_edge(name, "review")
     builder.add_edge("review", "orchestrator")
 
-    return builder.compile(checkpointer=checkpointer)
+    return builder
+
+
+def graph(config=None):
+    """langgraph dev / Platform 진입점. 플랫폼이 자체 checkpointer 주입."""
+    return _build().compile()
+
+
+def graph_with_checkpointer(checkpointer):
+    """FastAPI 앱에서 AsyncSqliteSaver 주입용."""
+    return _build().compile(checkpointer=checkpointer)
