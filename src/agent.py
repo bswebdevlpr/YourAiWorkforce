@@ -1,4 +1,5 @@
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.errors import GraphInterrupt
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
@@ -17,10 +18,11 @@ _system_prompt = load_persona(ORCHESTRATOR)
 _SUBAGENT_GRAPHS: dict = {}
 
 
-def _get_subagent(name: str):
-    if name not in _SUBAGENT_GRAPHS:
-        _SUBAGENT_GRAPHS[name] = SUBAGENT_REGISTRY[name].graph_factory(None)
-    return _SUBAGENT_GRAPHS[name]
+def _compile_subagents(checkpointer) -> dict:
+    return {
+        name: spec.graph_factory(checkpointer)
+        for name, spec in SUBAGENT_REGISTRY.items()
+    }
 
 
 def _compose_brief(args: dict) -> str:
@@ -44,6 +46,20 @@ def _summarize_for_parent(name: str, sub_messages: list) -> str:
     return f"[{name} 완료]\n{truncated}" if truncated else f"[{name} 완료]"
 
 
+def _make_sub_config(parent_config: RunnableConfig | None, target: str) -> dict:
+    parent_cfg = (parent_config or {}).get("configurable") or {}
+    parent_ns = parent_cfg.get("checkpoint_ns") or ""
+    sub_ns_segment = f"sub:{target}"
+    sub_ns = f"{parent_ns}|{sub_ns_segment}" if parent_ns else sub_ns_segment
+    return {
+        **(parent_config or {}),
+        "configurable": {
+            **parent_cfg,
+            "checkpoint_ns": sub_ns,
+        },
+    }
+
+
 def orchestrator(state: AgentState):
     messages = [{"role": "system", "content": _system_prompt}] + state["messages"]
     response = _model.invoke(messages)
@@ -61,7 +77,7 @@ def route(state: AgentState):
     return END
 
 
-def bridge(state: AgentState):
+async def bridge(state: AgentState, config: RunnableConfig):
     last = state["messages"][-1]
     if not (isinstance(last, AIMessage) and last.tool_calls):
         return state
@@ -71,11 +87,25 @@ def bridge(state: AgentState):
     if target not in SUBAGENT_REGISTRY:
         return state
 
+    subgraph = _SUBAGENT_GRAPHS.get(target)
+    if subgraph is None:
+        # langgraph dev 모드 등에서 사전 compile이 없는 경우 lazy fallback (checkpointer=None)
+        subgraph = SUBAGENT_REGISTRY[target].graph_factory(None)
+        _SUBAGENT_GRAPHS[target] = subgraph
+
+    sub_cfg = _make_sub_config(config, target)
     brief = _compose_brief(tc.get("args") or {})
-    subgraph = _get_subagent(target)
 
     try:
-        result = subgraph.invoke({"messages": [HumanMessage(content=brief)]})
+        sub_state = await subgraph.aget_state(sub_cfg)
+        is_resuming = bool(sub_state.next)
+    except Exception:
+        is_resuming = False
+
+    sub_input = None if is_resuming else {"messages": [HumanMessage(content=brief)]}
+
+    try:
+        result = await subgraph.ainvoke(sub_input, sub_cfg)
         summary = _summarize_for_parent(target, result.get("messages") or [])
     except GraphInterrupt:
         raise
@@ -123,9 +153,13 @@ def _build():
 
 def graph(config=None):
     """langgraph dev / Platform 진입점. 플랫폼이 자체 checkpointer 주입."""
+    global _SUBAGENT_GRAPHS
+    _SUBAGENT_GRAPHS = _compile_subagents(None)
     return _build().compile()
 
 
 def graph_with_checkpointer(checkpointer):
-    """FastAPI 앱에서 AsyncSqliteSaver 주입용."""
+    """FastAPI 앱에서 AsyncSqliteSaver 주입용. 서브에이전트도 같은 checkpointer로 compile."""
+    global _SUBAGENT_GRAPHS
+    _SUBAGENT_GRAPHS = _compile_subagents(checkpointer)
     return _build().compile(checkpointer=checkpointer)
