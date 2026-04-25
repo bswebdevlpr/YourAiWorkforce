@@ -1,4 +1,5 @@
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.errors import GraphInterrupt
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
@@ -76,6 +77,8 @@ def bridge(state: AgentState):
     try:
         result = subgraph.invoke({"messages": [HumanMessage(content=brief)]})
         summary = _summarize_for_parent(target, result.get("messages") or [])
+    except GraphInterrupt:
+        raise
     except Exception as exc:
         summary = f"[{target} 실행 실패] {exc}"
 
