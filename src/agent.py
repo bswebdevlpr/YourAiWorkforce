@@ -76,7 +76,7 @@ def bridge(state: AgentState):
     )
 
 
-def _build():
+def _build(checkpointer=None):
     builder = StateGraph(AgentState)
 
     subagent_names = tuple(SUBAGENT_REGISTRY.keys())
@@ -93,7 +93,7 @@ def _build():
         destinations=("bridge", "reset_project", "orchestrator"),
     )
     for name, spec in SUBAGENT_REGISTRY.items():
-        builder.add_node(name, spec.graph_factory(None))
+        builder.add_node(name, spec.graph_factory(checkpointer))
 
     builder.add_edge(START, "orchestrator")
     builder.add_conditional_edges(
@@ -114,11 +114,31 @@ def _build():
     return builder
 
 
+def _make_dev_checkpointer():
+    """모듈 import 시점에 한 번만 호출 — sync I/O를 ASGI 이벤트 루프 밖에서 처리하기 위함.
+
+    langgraph dev의 blockbuster 미들웨어가 핸들러 내부 sync I/O를 차단하므로
+    graph() 호출 시점이 아닌 모듈 로드 시점에 sqlite 연결을 만든다.
+    """
+    import sqlite3
+
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    from src.libs.path import CHECKPOINT_DB_PATH
+
+    CHECKPOINT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(CHECKPOINT_DB_PATH), check_same_thread=False)
+    return SqliteSaver(conn)
+
+
+_DEV_CHECKPOINTER = _make_dev_checkpointer()
+
+
 def graph(config=None):
-    """langgraph dev / Platform 진입점. 플랫폼이 자체 checkpointer 주입."""
-    return _build().compile()
+    """langgraph dev / Platform 진입점. 모듈 로드 시 만든 sync SqliteSaver를 재사용 (FastAPI와 같은 sqlite 파일 공유)."""
+    return _build(_DEV_CHECKPOINTER).compile(checkpointer=_DEV_CHECKPOINTER)
 
 
 def graph_with_checkpointer(checkpointer):
-    """FastAPI 앱에서 AsyncSqliteSaver 주입용. parent compile 시 subagent 노드도 같은 checkpointer 자동 상속."""
-    return _build().compile(checkpointer=checkpointer)
+    """FastAPI 앱에서 AsyncSqliteSaver 주입용. subagent도 같은 checkpointer로 compile하여 state 공유."""
+    return _build(checkpointer).compile(checkpointer=checkpointer)
