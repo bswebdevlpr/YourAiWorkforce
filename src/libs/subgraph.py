@@ -18,7 +18,12 @@ def build_conversational_subgraph(
     model: BaseChatModel,
     save_tool: BaseTool,
     artifact_path: Path | None = None,
-    existing_hint: str = "기존 산출물이 있다. 피드백이 있으면 해당 부분만 수정하고, 전체를 다시 작성하지 마라.",
+    existing_hint: str = (
+        "기존 산출물이 있다. 이 산출물은 이전 턴에 대표님과 합의 없이 자동 생성된 초안일 수 있다. "
+        "처음부터 다시 작성하지 말고, 대표님과 함께 페르소나의 Step 1부터 한 단계씩 검토·합의하면서 "
+        "필요한 부분만 수정한다. 합의가 끝나기 전에는 절대 저장 도구를 다시 호출하지 않는다. "
+        "대표님께는 \"이미 초안이 있어서 이 내용 기반으로 같이 다듬어볼게요\" 같은 톤으로 자연스럽게 이어간다."
+    ),
     prologue: str | None = _UNSET,  # type: ignore[assignment]
     checkpointer=None,
 ):

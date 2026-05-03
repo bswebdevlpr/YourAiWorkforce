@@ -10,9 +10,21 @@ def make_check_done_node(model: BaseChatModel):
     """작업 완료 여부를 LLM에게 자가판정시키는 노드.
 
     기본 편향은 "완료"다. 명시적으로 추가 작업이 필요하다는 신호가 있을 때만 NO.
+
+    단, 첫 턴 강행 저장(= bridge가 만든 brief 외에 진짜 user reply가 한 번도 없는 상태)
+    인 경우 LLM 판정을 건너뛰고 무조건 wait_for_user 로 떨어뜨린다.
     """
 
     def check_done(state: AgentState):
+        real_user_replies = [
+            m
+            for m in state["messages"]
+            if isinstance(m, HumanMessage)
+            and not (m.content or "").startswith("## 이번 작업 목표")
+        ]
+        if not real_user_replies:
+            return {"is_done": False}
+
         judge = model.invoke(
             [
                 SystemMessage(

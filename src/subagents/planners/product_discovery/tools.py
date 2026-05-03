@@ -21,7 +21,18 @@ def _validate_prd(content: str) -> list[str]:
     return missing
 
 
-@tool("save_prd", description="PRD를 작성한 경우 파일을 저장하기 위해 사용")
+@tool(
+    "save_prd",
+    description=(
+        "PRD를 파일로 저장하는 도구. **반드시 Step 1~6 전 구간이 대표님과의 대화로 합의된 직후 단 한 번만** 호출한다. "
+        "다음 경우에는 절대 호출하지 않는다: "
+        "(1) 작업 진입 첫 턴(인사·주제 확인 단계), "
+        "(2) 대표님의 추가 응답이 한 번도 없는 상태, "
+        "(3) Step 중간(예: 페르소나만 합의되고 P0/P1 미합의), "
+        "(4) 동일 PRD를 같은 턴에 두 번 저장(중복 호출 금지). "
+        "유저와의 합의 없이 호출하면 시스템이 거절하고 다시 대화로 돌아간다."
+    ),
+)
 def save_prd(content: str) -> str:
     """PRD를 검증 후 파일로 저장한다."""
     missing = _validate_prd(content)
