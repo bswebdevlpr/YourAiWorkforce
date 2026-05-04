@@ -11,26 +11,48 @@ PRD_REQUIRED_SECTIONS = [
     "## 6. Phase 마일스톤",
 ]
 
+PRD_PLACEHOLDER_MARKERS = [
+    "[Step ",
+    "[아이디어 파싱",
+    "[해결하려는",
+    "[페르소나명]",
+    "[기능명]",
+    "[측정 가능한",
+    "[목표값]",
+    "[메트릭명]",
+    "[In/Out of Scope]",
+    "[Phase별 마일스톤]",
+    "[포함되는",
+    "[제외되는",
+    "[날짜]",
+    "[이름]",
+    "[나이, 직업]",
+    "[1-2줄 설명]",
+]
+
 
 def _validate_prd(content: str) -> list[str]:
-    """PRD 필수 섹션 누락 여부를 검증한다."""
+    """PRD 필수 섹션 누락 + 미작성 placeholder 잔존 여부를 검증한다."""
     missing = []
     for section in PRD_REQUIRED_SECTIONS:
         if section not in content:
             missing.append(section)
-    return missing
+    if missing:
+        return missing
+
+    placeholders = [m for m in PRD_PLACEHOLDER_MARKERS if m in content]
+    if placeholders:
+        sample = ", ".join(placeholders[:3])
+        more = f" (외 {len(placeholders) - 3}개)" if len(placeholders) > 3 else ""
+        return [f"미작성 placeholder 잔존: {sample}{more}"]
+    return []
 
 
 @tool(
     "save_prd",
     description=(
-        "PRD를 파일로 저장하는 도구. **반드시 Step 1~6 전 구간이 대표님과의 대화로 합의된 직후 단 한 번만** 호출한다. "
-        "다음 경우에는 절대 호출하지 않는다: "
-        "(1) 작업 진입 첫 턴(인사·주제 확인 단계), "
-        "(2) 대표님의 추가 응답이 한 번도 없는 상태, "
-        "(3) Step 중간(예: 페르소나만 합의되고 P0/P1 미합의), "
-        "(4) 동일 PRD를 같은 턴에 두 번 저장(중복 호출 금지). "
-        "유저와의 합의 없이 호출하면 시스템이 거절하고 다시 대화로 돌아간다."
+        "PRD 파일 저장. Step 1~6 전 구간이 대표님과 합의된 직후 1회만 호출. "
+        "Step 중간(예: 페르소나만 합의되고 P0/P1 미합의) 호출 금지. 동일 턴 내 중복 호출 금지."
     ),
 )
 def save_prd(content: str) -> str:

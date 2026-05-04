@@ -14,8 +14,41 @@ _model = create_chat_model(MODEL_NAME_DEFAULT).bind_tools(ALL_TOOLS)
 _system_prompt = load_persona(ORCHESTRATOR)
 
 
+def _sanitize_query(query: str) -> str:
+    """orchestrator가 query에 'AI가 사용자에게 할 말'을 작성하는 환각을 방어.
+
+    - "대표님!" 같은 호칭 prefix 제거
+    - 의문문/명령문 단서 제거 후 명사구로 정규화
+    - 60자 초과 시 잘라냄
+    """
+    q = (query or "").strip()
+    if not q:
+        return q
+    # AI가 사용자에게 말 거는 패턴 prefix 제거
+    for prefix in ("대표님!", "대표님,", "대표님 "):
+        if q.startswith(prefix):
+            q = q[len(prefix):].lstrip()
+            break
+    # 흔한 trailing 의문/지시 패턴 잘라내기 (가장 마지막 마침표/물음표 이전까지 유지)
+    for sentinel in (
+        "어떤 형태",
+        "어떻게 하시",
+        "알려주세",
+        "들려주세",
+        "말씀해 주세",
+        "여쭤",
+        "?",
+    ):
+        idx = q.find(sentinel)
+        if idx > 0:
+            q = q[:idx].rstrip(" ,.!?·-")
+    if len(q) > 60:
+        q = q[:60].rstrip()
+    return q
+
+
 def _compose_brief(args: dict) -> str:
-    query = (args.get("query") or "").strip()
+    query = _sanitize_query(args.get("query") or "")
     hints = (args.get("context_hints") or "").strip()
     refs = args.get("artifact_refs") or []
 
