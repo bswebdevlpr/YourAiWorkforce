@@ -15,6 +15,12 @@ _UNSET = object()
 
 _TURN_END_RE = re.compile(r"`*\s*🛑?\s*\[?\s*턴\s*종료\s*\]?\s*`*", re.MULTILINE)
 _EMPTY_FENCE_RE = re.compile(r"`{2,}\s*\n?\s*`{2,}", re.MULTILINE)
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_GREETING_PREFIX_RE = re.compile(
+    r"^(?:`+\s*\n?)*\s*대표님[!,]?\s*안녕하세요[^\n]*\n+",
+    re.MULTILINE,
+)
+_EMPTY_FALLBACK = "(응답이 비어있어요, 같은 질문 한 번 더 부탁드릴게요!)"
 
 
 def _estimate_tokens(text: str) -> int:
@@ -22,17 +28,20 @@ def _estimate_tokens(text: str) -> int:
     return int(len(text) * 1.3)
 
 
-def _strip_system_artifacts(content: str) -> str:
-    """모델이 페르소나의 시스템 마커/빈 코드블록을 응답에 echo하는 경우 제거.
+def _strip_system_artifacts(content: str, *, strip_greeting: bool = False) -> str:
+    """모델이 페르소나의 시스템 마커/빈 코드블록/reasoning 토큰을 응답에 echo하는 경우 제거.
 
     잡는 패턴:
-    - 🛑 [턴 종료], [턴 종료] (plain)
-    - `🛑 [턴 종료]`, ``🛑 [턴 종료]`` (backtick wrapped, 1개 이상)
-    - 다양한 띄어쓰기/공백 변형
+    - <think>...</think> reasoning 블록 (qwen3 thinking mode artifact)
+    - 🛑 [턴 종료], [턴 종료], 백틱 wrapped 변형
     - 빈 fenced code block (``...`` 또는 ```...``` with 내용 없음)
+    - strip_greeting=True 시 첫 줄의 "대표님! 안녕하세요, ..." 인사 prefix
     """
-    cleaned = _TURN_END_RE.sub("", content)
+    cleaned = _THINK_BLOCK_RE.sub("", content)
+    cleaned = _TURN_END_RE.sub("", cleaned)
     cleaned = _EMPTY_FENCE_RE.sub("", cleaned)
+    if strip_greeting:
+        cleaned = _GREETING_PREFIX_RE.sub("", cleaned, count=1)
     return cleaned.strip()
 
 
@@ -120,7 +129,14 @@ def build_conversational_subgraph(
         response = active_model.invoke(messages)
 
         if isinstance(getattr(response, "content", None), str):
-            response.content = _strip_system_artifacts(response.content)
+            has_prior_ai = any(
+                isinstance(m, AIMessage) for m in state["messages"]
+            )
+            response.content = _strip_system_artifacts(
+                response.content, strip_greeting=has_prior_ai
+            )
+            if not response.content and not getattr(response, "tool_calls", None):
+                response.content = _EMPTY_FALLBACK
 
         prompt_eval = (getattr(response, "response_metadata", None) or {}).get(
             "prompt_eval_count"
