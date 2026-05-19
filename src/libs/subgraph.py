@@ -55,6 +55,7 @@ def build_conversational_subgraph(
     existing_hint: str = "기존 산출물이 있다. 피드백이 있으면 해당 부분만 수정하고, 전체를 다시 작성하지 마라.",
     save_user_reply_threshold: int = 3,
     prologue: str | None = _UNSET,  # type: ignore[assignment]
+    critic_model: BaseChatModel | None = None,
     checkpointer=None,
 ):
     """내부 루프형 대화 서브그래프 빌더.
@@ -252,7 +253,7 @@ def build_conversational_subgraph(
     def route_after_done(state: SubagentState):
         return "finalize" if state.get("is_done", True) else "wait_for_user"
 
-    check_done = make_check_done_node(model)
+    check_done = make_check_done_node(critic_model or model)
     wait_for_user = make_wait_for_user_node(continue_goto="model", exit_goto="finalize")
 
     builder = StateGraph(SubagentState)

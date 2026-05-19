@@ -11,6 +11,8 @@ def build_system_architect(checkpointer=None):
         persona=load_persona(SYSTEM_ARCHITECT),
         # 페르소나에 디렉토리 트리/패키지 매니페스트 예시 코드블록이 많아 ~14k 토큰. 32k로 여유 확보.
         model=create_chat_model(MODEL_NAME_PLANNER, temperature=0.3, num_ctx=32768),
+        # check_done YES/NO 판정 결정성 확보. product_discovery와 동일 정책.
+        critic_model=create_chat_model(MODEL_NAME_PLANNER, temperature=0.0, num_ctx=4096),
         save_tool=save_architecture,
         artifact_path=ARCHITECTURE_PATH,
         checkpointer=checkpointer,

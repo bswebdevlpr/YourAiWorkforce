@@ -1,9 +1,13 @@
+import re
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.types import Command, interrupt
 
 from src.state import AgentState
+
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
 def make_check_done_node(model: BaseChatModel):
@@ -13,6 +17,10 @@ def make_check_done_node(model: BaseChatModel):
 
     단, 첫 턴 강행 저장(= bridge가 만든 brief 외에 진짜 user reply가 한 번도 없는 상태)
     인 경우 LLM 판정을 건너뛰고 무조건 wait_for_user 로 떨어뜨린다.
+
+    `model` 은 판정용 critic 모델 (가능하면 temperature=0). qwen3/deepseek-r1 같은
+    thinking 모델은 <think>...</think> 블록을 본문에 echo하므로 그 부분을 먼저 떼어내고
+    YES/NO 만 본다. 그렇지 않으면 thinking 안의 "NO"가 오판정을 일으킨다.
     """
 
     def check_done(state: AgentState):
@@ -34,7 +42,9 @@ def make_check_done_node(model: BaseChatModel):
                 *state["messages"],
             ]
         )
-        return {"is_done": "NO" not in (judge.content or "").upper()}
+        raw = judge.content or ""
+        verdict = _THINK_BLOCK_RE.sub("", raw).strip().upper()
+        return {"is_done": "NO" not in verdict}
 
     return check_done
 
