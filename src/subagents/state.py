@@ -13,3 +13,4 @@ class SubagentState(TypedDict, total=False):
 
     messages: Annotated[list, add_messages]
     is_done: bool
+    _entry_count: int

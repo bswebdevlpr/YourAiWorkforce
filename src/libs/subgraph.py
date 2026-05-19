@@ -3,11 +3,12 @@ import warnings
 from pathlib import Path
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 
 from src.libs.nodes import make_check_done_node, make_wait_for_user_node
+from src.libs.path import ROOT
 from src.libs.persona import CONVERSATIONAL_PROTOCOL, load_persona
 from src.subagents.state import SubagentState
 
@@ -108,6 +109,10 @@ def build_conversational_subgraph(
         )
 
     def call_model(state: SubagentState):
+        entry_update = {}
+        if state.get("_entry_count") is None:
+            entry_update["_entry_count"] = len(state["messages"])
+
         messages = [{"role": "system", "content": system_content}]
 
         existing = _read_artifact()
@@ -149,7 +154,7 @@ def build_conversational_subgraph(
                 stacklevel=2,
             )
 
-        return {"messages": [response]}
+        return {"messages": [response], **entry_update}
 
     def call_save(state: SubagentState):
         last = state["messages"][-1]
@@ -192,6 +197,44 @@ def build_conversational_subgraph(
             ]
         }
 
+    def finalize(state: SubagentState):
+        """subagent 종료 직전 청소 노드.
+
+        _entry_count 이후 추가된 내부 messages 를 RemoveMessage 로 모두 청소하고,
+        parent 에 노출할 짧은 요약 AIMessage 한 건을 남긴다. LangGraph subgraph→parent
+        경계를 RemoveMessage 가 그대로 통과하므로 parent.messages 누적이 차단된다.
+        """
+        msgs = state["messages"]
+        entry = state.get("_entry_count", 0)
+        internal = [m for m in msgs[entry:] if getattr(m, "id", None)]
+
+        last_ai = next(
+            (
+                m
+                for m in reversed(msgs)
+                if isinstance(m, AIMessage) and (m.content or "").strip()
+            ),
+            None,
+        )
+        summary_text = (last_ai.content if last_ai else "").strip()[:200]
+        artifact_hint = ""
+        if artifact_path is not None and artifact_path.exists():
+            try:
+                artifact_hint = f"산출물: {artifact_path.relative_to(ROOT)}"
+            except ValueError:
+                artifact_hint = f"산출물: {artifact_path}"
+
+        summary_lines = [f"[{persona_label} 완료]"]
+        if artifact_hint:
+            summary_lines.append(artifact_hint)
+        if summary_text:
+            summary_lines.append(summary_text)
+        summary = AIMessage(content="\n".join(summary_lines))
+
+        return {
+            "messages": [*(RemoveMessage(id=m.id) for m in internal), summary],
+        }
+
     def route_after_model(state: SubagentState):
         last = state["messages"][-1]
         if isinstance(last, AIMessage) and last.tool_calls:
@@ -207,16 +250,17 @@ def build_conversational_subgraph(
         return "check_done"
 
     def route_after_done(state: SubagentState):
-        return END if state.get("is_done", True) else "wait_for_user"
+        return "finalize" if state.get("is_done", True) else "wait_for_user"
 
     check_done = make_check_done_node(model)
-    wait_for_user = make_wait_for_user_node(continue_goto="model", exit_goto=END)
+    wait_for_user = make_wait_for_user_node(continue_goto="model", exit_goto="finalize")
 
     builder = StateGraph(SubagentState)
     builder.add_node("model", call_model)
     builder.add_node("save", call_save)
     builder.add_node("check_done", check_done)
-    builder.add_node("wait_for_user", wait_for_user, destinations=("model", END))
+    builder.add_node("finalize", finalize)
+    builder.add_node("wait_for_user", wait_for_user, destinations=("model", "finalize"))
 
     builder.add_edge(START, "model")
     builder.add_conditional_edges(
@@ -232,7 +276,8 @@ def build_conversational_subgraph(
     builder.add_conditional_edges(
         "check_done",
         route_after_done,
-        {"wait_for_user": "wait_for_user", END: END},
+        {"wait_for_user": "wait_for_user", "finalize": "finalize"},
     )
+    builder.add_edge("finalize", END)
 
     return builder.compile(checkpointer=checkpointer)

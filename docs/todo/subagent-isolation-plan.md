@@ -257,10 +257,10 @@ Phase B3:   Task 8 (L3) — 수요 재확인 후
 - [x] Task 1 (State 필드 추가) — 커밋 669ea2b
 - [x] Task 2 (Tool schema 확장) — 커밋 fb32808
 - [x] Task 3 (Subgraph factory) — 커밋 9a20cfa
-- [ ] Task 4 (State schema 분리 + transformer)
-- [ ] Task 5 (배선 정리)
-- [ ] Task 6 (main.py 검증)
-- [ ] Task 6.5 E2E 검증
+- [x] Task 4 (State schema 분리 + transformer) — 커밋 fb364b4 (SubagentState) + 417ecfa (subagent를 parent 노드로) + finalize 노드 + RemoveMessage 청소 (이번 커밋)
+- [x] Task 5 (배선 정리) — 417ecfa 에서 완료
+- [x] Task 6 (main.py 검증) — 변경 최소화로 기존 resume 로직 그대로 동작
+- [x] Task 6.5 E2E 검증 — finalize 합류 후 langgraph dev 컴파일 OK, 2번째 subagent (system_architect) 신규 배선과 함께 검증
 - [ ] Phase B2 착수 결정 (독립 thread + consult)
 - [ ] Task 7 (consult)
 - [ ] Phase B3 착수 결정 (meeting)
@@ -271,3 +271,21 @@ Phase B3:   Task 8 (L3) — 수요 재확인 후
 - `_subagent_threads`, `_active_subagent`, `_active_subagent_thread` 필드 — **Phase B2 대비로 예약**. Phase B1에선 미사용
 - `context_hints`, `artifact_refs` tool schema 확장 — **즉시 사용** (Task 4 브리핑 템플릿 구성 시)
 - `graph_factory` 패턴 — **즉시 사용** (Task 4에서 bridge가 내부 invoke할 때 factory로 compile)
+
+---
+
+## Task 4 실제 구현 메모 (원안 → 실행본 변경)
+
+**원안** (이 문서 line 31, 102-105): bridge에서 subgraph.invoke 후 last AIMessage 요약만 ToolMessage로 parent에 병합. subgraph는 parent 노드로 등록하지 않음.
+
+**실행본** (커밋 417ecfa 이후): subgraph를 parent 노드로 직접 등록 (LangGraph 기본 interrupt 전파 활용). 단, 그 결과 SubagentState/AgentState가 `messages: add_messages` 를 공유해 subagent 내부 messages가 parent로 누적되는 leak 발생.
+
+**최종 보정** (이번 커밋): subagent에 `finalize` 노드 신설. `_entry_count: int` 필드로 subagent 첫 진입 시점 messages 길이를 캡처하고, 종료 직전 `finalize`가 이후 추가된 내부 messages를 `RemoveMessage(id=...)` 로 청소하면서 짧은 요약 AIMessage 1건만 남긴다. LangGraph subgraph→parent 경계를 RemoveMessage 가 통과하므로 parent.messages 누적 차단.
+
+```
+END 경로 모두 finalize 경유:
+  check_done → finalize → END
+  wait_for_user (complete/reject) → finalize → END
+```
+
+이로써 원안의 "요약만 parent" 효과를 LangGraph 기본 interrupt 전파를 깨뜨리지 않고 달성.
