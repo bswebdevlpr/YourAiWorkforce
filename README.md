@@ -172,8 +172,13 @@ generation) would produce an "ambitious but non-working demo".
 | Phase 1–6 (build/QA/security/deploy agents) | 📐 persona designs only ([agents/](agents/)) · roadmap |
 | Go gateway (SSE streaming BFF) · streaming web UI | 🚧 planned |
 
+**See it actually run** → [docs/samples/](docs/samples/) holds a real, unedited PRD generated
+end-to-end by the `product_discovery` agent (with the model's rough edges left in, documented honestly).
+
 ---
 
 ## License
 
-[MIT](LICENSE)
+**All rights reserved.** This repository is public for portfolio/demonstration purposes only —
+you may read the source to evaluate the work, but no license is granted to reuse, copy, modify, or
+redistribute it. See [LICENSE](LICENSE).
