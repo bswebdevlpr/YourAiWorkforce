@@ -55,7 +55,7 @@ Memory 요약/압축, Observability 강화.
 
 ### Phase B1
 
-#### Task 1: State 스키마 확장 `[L1 / haiku]`
+#### Task 1: State 스키마 확장
 - **파일**: `src/state.py`
 - **내용**:
   - `_session` 네임스페이스로 묶는 리팩토링 고려 (필드 산재 방지)
@@ -66,7 +66,7 @@ Memory 요약/압축, Observability 강화.
   - 기존 `_approved_subagents` 유지
 - **선행**: 없음
 
-#### Task 2: Tool schema 확장 `[L1 / haiku]`
+#### Task 2: Tool schema 확장
 - **파일**: `src/subagents/__init__.py`
 - **내용**: `SUBAGENT_TOOLS` parameters에 다음 추가
   - `context_hints: string` — 이번 작업에 필요한 결정/맥락 요약
@@ -74,7 +74,7 @@ Memory 요약/압축, Observability 강화.
   - `required`는 `query`만 유지
 - **선행**: 없음 (Task 1과 병렬)
 
-#### Task 3: Subgraph factory + checkpointer 주입 `[L2 / sonnet]`
+#### Task 3: Subgraph factory + checkpointer 주입
 - **파일**: `src/libs/subgraph.py`, `src/subagents/spec.py`, `src/subagents/planners/`, `src/main.py`
 - **내용**:
   - `SubagentSpec.graph` → `SubagentSpec.graph_factory: Callable[[Checkpointer], CompiledGraph]`
@@ -83,7 +83,7 @@ Memory 요약/압축, Observability 강화.
   - 기존 `.graph` 참조 전수조사 필요
 - **선행**: 없음 (Task 1/2와 병렬)
 
-#### Task 4: State schema 분리 + transformer 구현 — 핵심 `[L3 / opus, 메인 직접]`
+#### Task 4: State schema 분리 + transformer 구현 — 핵심
 - **파일**: 신규 `src/subagents/state.py`, `src/libs/subgraph.py` 수정, `src/agent.py` (bridge 재작성)
 - **설계 방향**: subgraph를 parent 노드로 유지하되 state schema를 완전히 분리. bridge 노드가 parent state → subgraph input 변환 + subgraph output → parent 병합을 모두 담당.
 
@@ -111,7 +111,7 @@ Memory 요약/압축, Observability 강화.
 - **Option B 이점**: LangGraph 1.1.2의 기본 interrupt 전파 경로를 그대로 사용 → 수동 passthrough 불필요, Studio resume 버그와 무관한 영역
 - **선행**: Task 1, Task 2, Task 3 (모두 완료)
 
-#### Task 5: Parent 그래프 배선 정리 `[L2 / sonnet]`
+#### Task 5: Parent 그래프 배선 정리
 - **파일**: `src/agent.py`
 - **내용**:
   - `graph()` / `_build()` 에서 `for name, spec in SUBAGENT_REGISTRY.items(): builder.add_node(name, spec.graph_factory(None))` 제거 (Task 4에서 이미 했으면 skip)
@@ -120,7 +120,7 @@ Memory 요약/압축, Observability 강화.
   - approval_gate는 유지 (reset_project 게이트용)
 - **선행**: Task 4
 
-#### Task 6: main.py / 전체 검증 `[L2 / sonnet]`
+#### Task 6: main.py / 전체 검증
 - **파일**: `src/main.py` (영향 적음), 필요 시 간단 TestClient 스크립트
 - **내용**:
   - Option B는 parent thread 하나에 모든 resume이 집중됨 → `main.py`의 기존 resume 로직 그대로 동작 예상. 변경 최소
@@ -143,7 +143,7 @@ Memory 요약/압축, Observability 강화.
 
 ### Phase B2 (후속)
 
-#### Task 7: consult tool — 방식 A `[L2 / sonnet]`
+#### Task 7: consult tool — 방식 A
 - **내용**:
   - `consult_subagent(target, question, return_to)` tool 추가
   - target subagent thread에 일회성 ainvoke (interrupt 없음 — **consultation mode 플래그**로 wait_for_user 스킵)
@@ -154,7 +154,7 @@ Memory 요약/압축, Observability 강화.
 
 ### Phase B3 (수요 확인 후)
 
-#### Task 8: meeting mode — 방식 B `[L3 / opus]`
+#### Task 8: meeting mode — 방식 B
 - **내용**:
   - `start_meeting(participants)` / `end_meeting()` tool
   - parent state `_meeting: {participants, log}` 필드
@@ -175,25 +175,18 @@ Memory 요약/압축, Observability 강화.
 ## 실행 순서
 
 ```
-1라운드 병렬: Task 1 (L1) + Task 2 (L1) + Task 3 (L2)
+1라운드 병렬: Task 1 + Task 2 + Task 3
        ↓
-2라운드:    Task 4 (L3, 메인 직접, feature 브랜치)
+2라운드:    Task 4 (feature 브랜치)
        ↓
-3라운드:    Task 5 (L2) → Task 6 (L2)
+3라운드:    Task 5 → Task 6
        ↓
            Task 6.5 검증 체크포인트
        ↓
-Phase B2:   Task 7 (L2)
+Phase B2:   Task 7
        ↓
-Phase B3:   Task 8 (L3) — 수요 재확인 후
+Phase B3:   Task 8 — 수요 재확인 후
 ```
-
----
-
-## 예상 모델 사용량 (Phase B1 기준)
-- L1 (haiku): 2개
-- L2 (sonnet): 3개
-- L3 (opus): 1개 (메인 직접)
 
 ---
 
