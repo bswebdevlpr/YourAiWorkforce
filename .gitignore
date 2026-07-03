@@ -1,7 +1,27 @@
+# Python / 가상환경
 .venv/
-.langgraph_api/
 __pycache__/
-ai-workspace/
+*.py[cod]
+
+# LangGraph 런타임 상태 (로컬 아티팩트)
+.langgraph_api/
 .checkpoints/
 
+# 에이전트 작업 산출물 (골든 샘플은 별도 커밋)
+ai-workspace/
+
+# 비밀정보 — .env.example 만 추적
 .env*
+!.env.example
+
+# 내부 전략/면접 준비 문서 (비공개)
+docs/todo/portfolio-milestone.md
+
+# 블로그 원고는 별도 플랫폼에만 발행 (코드 저장소 비공개)
+docs/blog/
+
+# 에디터/도구 로컬 설정
+.claude/
+.DS_Store
+.idea/
+.vscode/
