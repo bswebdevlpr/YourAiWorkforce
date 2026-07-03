@@ -4,10 +4,12 @@
 > model into behaving *deterministically enough to trust* — running entirely on a 16GB
 > MacBook at **zero API cost**. A founder's rough idea → structured artifacts (PRD + architecture doc).
 
-An orchestrator built on [LangGraph](https://langchain-ai.github.io/langgraph/) `StateGraph`
-delegates work to specialist subagents, with a human approval (HITL) gate at each step.
-All inference runs on local [Ollama](https://ollama.com) models (`qwen3:8b`, `deepseek-r1:8b`),
-so there are **no external API calls, no cost, and no data leaving the machine.**
+One orchestrator routes work to specialist subagents. A human approves each step. Every model call
+runs on a local [Ollama](https://ollama.com) model (`qwen3:8b`, `deepseek-r1:8b`) — no API, no cost,
+nothing leaves the machine.
+
+It's built on [LangGraph](https://langchain-ai.github.io/langgraph/) `StateGraph`, and the whole
+design follows one rule I kept relearning the hard way: **prompt is suggestion, graph is law.**
 
 ---
 
@@ -106,11 +108,11 @@ completion check deterministic.
 
 ### 5. Save-validation gate & response post-processing
 - `_validate_prd`: checks required sections exist and no placeholders remain, **blocking incomplete
-  artifacts from being saved**.
+  artifacts from being saved**. → [product_discovery/tools.py:34](src/subagents/planners/product_discovery/tools.py#L34)
 - Response post-processing: strips `<think>` blocks, `🛑 [턴 종료]` markers, empty code fences, and
-  greeting prefixes after turn 2, all via regex.
+  greeting prefixes after turn 2, all via regex. → [src/libs/subgraph.py](src/libs/subgraph.py)
 - `_sanitize_query`: normalizes the orchestrator's hallucinated honorifics (e.g. "대표님!") into a
-  noun phrase. → [src/libs/subgraph.py](src/libs/subgraph.py)
+  noun phrase. → [src/agent.py:17](src/agent.py#L17)
 
 ### 6. Hiding the save tool (dynamic tool binding)
 Since the model ignored "don't save on turn 1", I made the **save tool conditionally bound** so it's
