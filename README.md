@@ -82,12 +82,16 @@ Key source: [src/agent.py](src/agent.py) (graph assembly),
 Each item is backed by code/traces; the design write-ups live in a separate blog series,
 [**LangGraph Multi-Agent series**](https://bswebdev.hashnode.dev/series/lang-graph).
 
-### 1. Cross-subagent state contamination → state isolation
-With a shared `state["messages"]`, the orchestrator's handoff messages and tool_calls bled into
-the planner's LLM input, causing the planner to introduce *itself* as the PM. I split subagents
-into a separate `SubagentState` and drew a boundary with `RemoveMessage` in the `finalize` step to
-stop parent-message contamination.
-→ [src/subagents/state.py](src/subagents/state.py) · [libs/subgraph.py](src/libs/subgraph.py)
+### 1. State isolation — two directions, one solved
+A subagent's state can leak two ways, and only one is worth fully closing. **Outbound** — the
+subagent's internal turns piling up in the parent thread — is solved: subagents run on a separate
+`SubagentState`, and a `finalize` step uses `RemoveMessage` to strip those internal turns, leaving
+the parent only a short summary. **Inbound** — the subagent's LLM still receiving the parent's
+messages — is left in on purpose, compensated by a structured briefing packet; closing it fully
+would have meant giving up LangGraph's native interrupt propagation (I tried, and resume broke).
+The original "planner introduces itself as the PM" symptom was fixed separately — model swap +
+persona hardening — not by isolation.
+→ [src/subagents/state.py](src/subagents/state.py) · [libs/subgraph.py:201](src/libs/subgraph.py#L201)
 
 ### 2. Subgraph resume restarted from scratch every time
 The checkpointer wasn't passed down to the subgraph, so the user's reply vanished from `messages`
@@ -176,6 +180,12 @@ generation) would produce an "ambitious but non-working demo".
 end-to-end by the `product_discovery` agent (with the model's rough edges left in, documented honestly).
 
 ---
+
+## How this was built
+
+Pair-programmed with [Claude Code](https://claude.com/claude-code). The architecture, the
+decisions, and the trade-offs documented here are mine; much of the implementation was AI-assisted
+— the same way the [blog series](https://bswebdev.hashnode.dev/series/lang-graph) tells it.
 
 ## License
 
