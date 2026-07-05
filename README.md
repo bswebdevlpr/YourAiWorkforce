@@ -184,8 +184,7 @@ end-to-end by the `product_discovery` agent (with the model's rough edges left i
 ## How this was built
 
 Pair-programmed with [Claude Code](https://claude.com/claude-code). The architecture, the
-decisions, and the trade-offs documented here are mine; much of the implementation was AI-assisted
-— the same way the [blog series](https://bswebdev.hashnode.dev/series/lang-graph) tells it.
+decisions, and the trade-offs documented here are mine; much of the implementation was AI-assisted.
 
 ## License
 
