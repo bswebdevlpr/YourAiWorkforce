@@ -35,6 +35,32 @@ async def generate_chat_responses(agent, config, input_) -> AsyncGenerator[str, 
             yield chunk.content
 
 
+@app.get("/state/{thread_id}")
+async def get_thread_state(thread_id: str):
+    """스레드의 현재 상태를 조회한다 (읽기 전용).
+
+    Go 게이트웨이가 스트림 종료 후 "이건 interrupt로 멈춘 건가, 턴이 끝난 건가"를
+    판정하는 데 쓴다. 스트리밍 응답(POST /)에는 그 구분이 실리지 않기 때문.
+    """
+    agent = app.state.agent
+    config = {"configurable": {"thread_id": thread_id}}
+    snapshot = await agent.aget_state(config)
+
+    payload = None
+    for task in snapshot.tasks:
+        for intr in task.interrupts:
+            payload = intr.value
+            break
+        if payload is not None:
+            break
+
+    return {
+        "exists": bool(snapshot.values),
+        "interrupted": bool(snapshot.next),
+        "interrupt": payload,
+    }
+
+
 @app.post("/")
 async def root(body: Annotated[PostBody, Body(description="유저 입력")]):
     agent = app.state.agent

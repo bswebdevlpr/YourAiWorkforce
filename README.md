@@ -34,6 +34,25 @@ from the opposite constraint:
 
 ## Architecture
 
+Two services. The Go gateway owns the **client-facing protocol**; the Python service owns the
+**graph**. The split is not cosmetic — see [hard problem #8](#8-the-python-stream-never-says-why-it-ended).
+
+```mermaid
+flowchart LR
+    B["browser<br/>(SSE client)"]
+    G["Go gateway :8080<br/>protocol · streaming · UI"]
+    P["Python FastAPI :8000<br/>LangGraph orchestrator"]
+    O["Ollama<br/>qwen3:8b · deepseek-r1:8b"]
+
+    B -->|"POST /chat"| G
+    G -->|"event: token / interrupt / done"| B
+    G -->|"POST / (raw token stream)"| P
+    G -->|"GET /state/:thread_id"| P
+    P --> O
+```
+
+Inside the Python service, the graph itself:
+
 ```mermaid
 flowchart TD
     START([START]) --> ORC[orchestrator<br/>qwen3:8b]
@@ -126,6 +145,22 @@ physically impossible to call. → [libs/subgraph.py](src/libs/subgraph.py) (`mo
 A decision record of how `gemma4:e4b` (4B) failed at following Korean negative-instruction lists —
 with LangSmith trace evidence — and the move to `qwen3:8b`. → [docs/plan/model-use.md](docs/plan/model-use.md)
 
+### 8. The Python stream never says *why* it ended
+The FastAPI endpoint streams raw model tokens and then simply closes. A turn that reached `END` and
+a graph that **paused at an `interrupt()` waiting for human approval** are *byte-identical* on the
+wire — both are "tokens, then EOF". A chat client can't tell whether to re-open the input box or to
+render an approval prompt, and that distinction is the entire point of a HITL system.
+
+The information exists — LangGraph's `snapshot.next` is non-empty exactly when the graph is paused —
+it just never reaches the client. So the gateway **reconstructs it**: it relays the token stream,
+and the moment the stream hits EOF it makes a *second* call (`GET /state/{thread_id}`) to ask why,
+then emits an explicit `event: interrupt` or `event: done`.
+
+That's the load-bearing reason the gateway exists, and it fixes the service split in place:
+**Python owns the graph (tokens + state); Go owns the wire protocol the client actually consumes.**
+The browser's event handling collapses to a four-case `switch` with nothing left to infer.
+→ [gateway/main.go](gateway/main.go) (`realUpstream`, `fetchState`) · [src/main.py](src/main.py) (`GET /state/{thread_id}`)
+
 ---
 
 ## Tech stack
@@ -135,6 +170,8 @@ with LangSmith trace evidence — and the move to `qwen3:8b`. → [docs/plan/mod
 | Orchestration | LangGraph (`StateGraph`, subgraph-as-node, `interrupt`/`Command`) |
 | LLM runtime | Ollama (local) — `qwen3:8b` (orchestrator/planner), `deepseek-r1:8b` (critic candidate) |
 | Serving | FastAPI (ASGI) + `langgraph dev` |
+| Gateway / BFF | Go (stdlib only — `net/http`, goroutines, `context`, `embed`) |
+| Client protocol | SSE — `token` / `interrupt` / `done` / `error` (designed at the gateway) |
 | State | SqliteSaver checkpointer (async/sync file sharing) |
 | Observability | LangSmith tracing |
 | Packaging | uv, Docker / docker-compose |
@@ -151,12 +188,17 @@ ollama pull deepseek-r1:8b
 # 2. Environment variables
 cp .env.example .env    # fill in LANGSMITH_API_KEY, MODEL_BASE_URL, etc.
 
-# 3. Dev server
+# 3. Python orchestrator (port 8000)
 uv sync
-uv run uvicorn src.main:app --reload
+uv run uvicorn src.main:app --port 8000
 # or LangGraph Studio: uv run langgraph dev
 
-# 4. (optional) containers
+# 4. Go gateway + web UI (port 8080)
+cd gateway && go run .
+# then open http://localhost:8080
+# override the upstream with UPSTREAM_BASE (default: http://localhost:8000)
+
+# 5. (optional) containers
 docker-compose up --build
 ```
 
@@ -174,7 +216,9 @@ generation) would produce an "ambitious but non-working demo".
 | Phase 0 — System Architect (PRD → architecture) | ✅ wired in code |
 | Orchestrator routing · HITL approval gate · state isolation | ✅ wired in code |
 | Phase 1–6 (build/QA/security/deploy agents) | 📐 persona designs only ([agents/](agents/)) · roadmap |
-| Go gateway (SSE streaming BFF) · streaming web UI | 🚧 planned |
+| Go gateway — SSE relay of the `interrupt`/`resume` protocol | ✅ wired in code ([gateway/](gateway/)) |
+| Go gateway — thin streaming web UI | ✅ wired in code ([gateway/static/](gateway/static/)) |
+| Go gateway — session management · artifact-serving API | 🚧 planned |
 
 **See it actually run** → [docs/samples/](docs/samples/) holds a real, unedited PRD generated
 end-to-end by the `product_discovery` agent (with the model's rough edges left in, documented honestly).
