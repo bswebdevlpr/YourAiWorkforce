@@ -1,8 +1,8 @@
-# YourAiWorkforce — Local 8B LLM Multi-Agent Orchestration
+# YourAiWorkforce — a local-8B multi-agent pipeline, clamped for trust and squeezed for cost
 
-> **In one line**: a multi-agent planning pipeline that tames a *stochastic* 8B local
-> model into behaving *deterministically enough to trust* — running entirely on a 16GB
-> MacBook at **zero API cost**. A founder's rough idea → structured artifacts (PRD + architecture doc).
+> **In one line**: a multi-agent planning pipeline that turns a *stochastic, slow* 8B local model
+> into something *reliable and cheap enough to actually use* — running entirely on a 16GB MacBook at
+> **zero API cost**. A founder's rough idea → structured artifacts (PRD + architecture doc).
 
 One orchestrator routes work to specialist subagents. A human approves each step. Every model call
 runs on a local [Ollama](https://ollama.com) model — Phase 0 runs entirely on `qwen3:8b` (orchestrator,
@@ -15,16 +15,21 @@ design follows one rule I kept relearning the hard way: **prompt is suggestion, 
 
 ## Why this project
 
-With a commercial API (GPT-4, Claude), multi-agent systems "just work" — but that's the
-*model* doing the heavy lifting, and there's no engineering story in it. This project starts
-from the opposite constraint:
+With a commercial API (GPT-4, Claude), multi-agent systems "just work" — the *model* does the
+heavy lifting and there's no engineering story in it. This project starts from the opposite
+constraint: a small local model that is both **unreliable** and **expensive to run**, on a 16GB
+machine. Two problems, two pillars — and the whole repo is those two shells:
 
-- **An 8B local model breaks instructions probabilistically.** Tell the persona "don't call
-  yourself the PM" and it does; tell it "don't call the save tool on turn 1" and it does;
-  it leaks thinking tokens into its replies.
-- **So instead of *trusting* the model, I *clamp* it.** A separate critic model, a save-validation
-  gate, response post-processing, state isolation — wrapping each probabilistic component in a
-  deterministic shell is the core of this repo.
+- **Clamp — for reliability.** An 8B model breaks instructions probabilistically: tell the persona
+  "don't call yourself the PM" and it does; tell it "don't save on turn 1" and it does; it leaks
+  thinking tokens into replies. So instead of *trusting* the model, I *clamp* it — a separate critic,
+  a save-validation gate, response post-processing, state isolation: each probabilistic component
+  wrapped in a **deterministic** shell.
+- **Squeeze — for efficiency.** On-device, every discarded token is wall-clock and every context
+  window is RAM. So I don't guess, I measure and cut: instrument every model call, size `num_ctx`
+  per role, kill reasoning where it buys nothing. One measured result — the done-check dropped from
+  ~25s to ~0.3s at matched accuracy, because prompt design beat inference-time compute. Each
+  component wrapped in a **cheap** shell. → [docs/metrics/](docs/metrics/)
 
 > 📌 **Current scope**: **Phase 0** (idea → PRD → architecture) works end-to-end.
 > [`agents/`](agents/) contains persona designs through Phase 1–6 (build / QA / deploy), but
@@ -98,19 +103,20 @@ Key source: [src/agent.py](src/agent.py) (graph assembly),
 
 ## Engineering highlights
 
-The harder problems this project actually turned on. Full write-ups, code, and traces →
+The harder problems this project turned on — **clamping** the model for reliability, **squeezing** it
+for cost, and the **system** built around both. Full write-ups, code, and traces →
 **[docs/engineering-notes.md](docs/engineering-notes.md)**.
 
-- **State isolation across a subgraph boundary** — strip a subagent's internal turns from the
-  parent thread with `RemoveMessage`, while keeping LangGraph's native interrupt propagation.
-- **A deterministic done-check, then measured** — a temp=0 critic with reasoning off and a
+- **Squeeze · a deterministic done-check, then measured** — a temp=0 critic with reasoning off and a
   safety-biased prompt matches thinking-mode accuracy at ~48× lower latency; prompt design beat
-  inference-time compute ([numbers](docs/metrics/)).
-- **Reconstructing why the stream ended** — the Python token stream is byte-identical whether a
-  turn finished or paused for approval, so the Go gateway makes a second state call and emits
+  inference-time compute, proven with a per-call instrumentation harness ([numbers](docs/metrics/)).
+- **Clamp · state isolation across a subgraph boundary** — strip a subagent's internal turns from the
+  parent thread with `RemoveMessage`, while keeping LangGraph's native interrupt propagation.
+- **Clamp · making an illegal action impossible** — dynamic tool binding so the model physically
+  *can't* call `save` before it's allowed, instead of asking it not to.
+- **System · reconstructing why the stream ended** — the Python token stream is byte-identical whether
+  a turn finished or paused for approval, so the Go gateway makes a second state call and emits
   explicit `interrupt`/`done` events. The load-bearing reason the gateway exists.
-- **Making an illegal action impossible** — dynamic tool binding so the model physically *can't*
-  call `save` before it's allowed, instead of asking it not to.
 
 ---
 
@@ -125,6 +131,7 @@ The harder problems this project actually turned on. Full write-ups, code, and t
 | Client protocol | SSE — `token` / `interrupt` / `done` / `error` (designed at the gateway) |
 | State | SqliteSaver checkpointer (async/sync file sharing) |
 | Observability | LangSmith tracing |
+| Efficiency | per-call instrumentation harness + labeled eval → [docs/metrics/](docs/metrics/) |
 | Packaging | uv, Docker / docker-compose |
 
 ---

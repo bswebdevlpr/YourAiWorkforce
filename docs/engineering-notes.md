@@ -1,10 +1,14 @@
 # Hard problems solved
 
-The engineering spine of this project: the non-obvious problems that came up taming a
-stochastic 8B local model into a deterministic-enough pipeline, and how each was closed
-(or deliberately left open). Each item is backed by code and traces. Some have deeper
+The engineering spine of this project: taming a stochastic, slow 8B local model into a system that's
+**reliable (clamp)** and **cheap (squeeze)** enough to use — plus the service around it. The problems
+below fall into those three buckets; each is backed by code and traces, and some have deeper
 write-ups in the blog series,
 [**LangGraph Multi-Agent series**](https://bswebdev.hashnode.dev/series/lang-graph).
+
+- **Clamp — reliability:** #1 state isolation · #5 save-validation & post-processing · #6 dynamic tool binding · #7 model selection
+- **Squeeze — efficiency:** #4 deterministic done-check, measured
+- **System — the service around the model:** #2 subgraph resume · #3 sync-I/O block · #8 why the stream ended
 
 For the project overview and how to run it, see the [README](../README.md).
 

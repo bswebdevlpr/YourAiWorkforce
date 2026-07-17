@@ -1,7 +1,7 @@
 [project]
 name = "agentscompany"
 version = "0.1.0"
-description = "Add your description here"
+description = "A local-8B multi-agent planning pipeline, clamped for reliability and squeezed for cost — runs entirely on a 16GB machine at zero API cost."
 readme = "README.md"
 requires-python = ">=3.13, <3.14"
 dependencies = [
