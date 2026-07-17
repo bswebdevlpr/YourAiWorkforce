@@ -126,8 +126,13 @@ I worked around it by opening the sqlite connection at **module load time** rath
 ### 4. Making a stochastic 8B deterministic — isolating the done-check
 When the planner (temp=0.5, divergent) made the `check_done` YES/NO call, it misjudged. I injected
 a **separate temp=0 critic instance** (same model file) and stripped thinking tokens, making the
-completion check deterministic.
-→ [product_discovery/__init__.py](src/subagents/planners/product_discovery/__init__.py)
+completion check deterministic. I then instrumented it and pushed further: a labeled eval showed the
+critic's thinking mode was burning ~465 discarded tokens (~25s) per YES/NO, so I turned reasoning
+**off** and rewrote the prompt to bias toward *continue* on ambiguity (safe for HITL). Result —
+**parity with thinking on the dominant case distribution at ~48× lower latency**; prompt design beat
+inference-time compute. Backed by numbers, not adjectives.
+→ [product_discovery/__init__.py](src/subagents/planners/product_discovery/__init__.py) ·
+**[docs/metrics/](docs/metrics/) (harness + eval, reproducible)**
 
 ### 5. Save-validation gate & response post-processing
 - `_validate_prd`: checks required sections exist and no placeholders remain, **blocking incomplete

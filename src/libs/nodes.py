@@ -9,16 +9,29 @@ from src.state import AgentState
 
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
+# 완료 판정 프롬프트. HITL 안전 편향: 애매하면 NO(계속)로 떨어뜨린다.
+# 조기 종료(false YES)는 사용자가 맥락을 잃는 값비싼 실수지만, 한 번 더 묻는
+# 것(false NO)은 값싸다. no-think critic이 암묵적 요청을 "완료"로 뭉개는 경향이
+# 있어(eval_check_done.py 참고) 임계값을 NO 쪽으로 낮췄다.
+CHECK_DONE_SYSTEM = (
+    "직전 대화에서 사용자가 작업을 계속 이어가길 원하는지 판단한다.\n"
+    "- 다음 중 하나라도 있으면 NO: 명시적 추가·수정·보완 요청, 질문, 재검토 요청, "
+    "또는 주저·미완결·불만족을 비치는 뉘앙스.\n"
+    "- 사용자가 명확히 만족·승인했고 더 다룰 것이 없을 때만 YES.\n"
+    "판단이 애매하면 NO(계속). YES/NO 한 단어로만 답한다."
+)
+
 
 def make_check_done_node(model: BaseChatModel):
     """작업 완료 여부를 LLM에게 자가판정시키는 노드.
 
-    기본 편향은 "완료"다. 명시적으로 추가 작업이 필요하다는 신호가 있을 때만 NO.
+    기본 편향은 "계속(NO)"이다 — HITL에서 조기 종료보다 한 번 더 묻는 게 안전하므로,
+    애매하면 NO로 떨어뜨린다(CHECK_DONE_SYSTEM 참고). 명확한 만족·승인일 때만 YES.
 
     단, 첫 턴 강행 저장(= bridge가 만든 brief 외에 진짜 user reply가 한 번도 없는 상태)
     인 경우 LLM 판정을 건너뛰고 무조건 wait_for_user 로 떨어뜨린다.
 
-    `model` 은 판정용 critic 모델 (가능하면 temperature=0). qwen3/deepseek-r1 같은
+    `model` 은 판정용 critic 모델 (가능하면 temperature=0, reasoning=False). qwen3
     thinking 모델은 <think>...</think> 블록을 본문에 echo하므로 그 부분을 먼저 떼어내고
     YES/NO 만 본다. 그렇지 않으면 thinking 안의 "NO"가 오판정을 일으킨다.
     """
@@ -35,10 +48,7 @@ def make_check_done_node(model: BaseChatModel):
 
         judge = model.invoke(
             [
-                SystemMessage(
-                    "직전 대화에서 사용자가 추가 요청을 명시했는지 판단한다. "
-                    "추가 요청이 명시적으로 있으면 NO, 그렇지 않으면 YES 한 단어로만 답한다."
-                ),
+                SystemMessage(CHECK_DONE_SYSTEM),
                 *state["messages"],
             ]
         )

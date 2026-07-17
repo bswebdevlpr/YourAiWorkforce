@@ -10,9 +10,17 @@ def build_system_architect(checkpointer=None):
     return build_conversational_subgraph(
         persona=load_persona(SYSTEM_ARCHITECT),
         # 페르소나에 디렉토리 트리/패키지 매니페스트 예시 코드블록이 많아 ~14k 토큰. 32k로 여유 확보.
-        model=create_chat_model(MODEL_NAME_PLANNER, temperature=0.3, num_ctx=32768),
+        model=create_chat_model(
+            MODEL_NAME_PLANNER, temperature=0.3, num_ctx=32768,
+            role="planner:system_architect:gen",
+        ),
         # check_done YES/NO 판정 결정성 확보. product_discovery와 동일 정책.
-        critic_model=create_chat_model(MODEL_NAME_PLANNER, temperature=0.0, num_ctx=4096),
+        critic_model=create_chat_model(
+            MODEL_NAME_PLANNER, temperature=0.0, num_ctx=4096,
+            role="critic:system_architect:done",
+            # product_discovery와 동일: 판정 호출은 thinking off로 낭비 토큰 제거.
+            reasoning=False,
+        ),
         save_tool=save_architecture,
         artifact_path=ARCHITECTURE_PATH,
         checkpointer=checkpointer,

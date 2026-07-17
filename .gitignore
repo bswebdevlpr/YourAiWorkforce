@@ -20,6 +20,9 @@ docs/todo/portfolio-milestone.md
 # 블로그 원고는 별도 플랫폼에만 발행 (코드 저장소 비공개)
 docs/blog/
 
+# 계측 원시 로그 (집계 리포트만 문서로 커밋). 루트 앵커 — docs/metrics/ 는 추적.
+/metrics/
+
 # 에디터/도구 로컬 설정
 .claude/
 .DS_Store

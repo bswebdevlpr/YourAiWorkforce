@@ -10,7 +10,7 @@ from src.state import AgentState
 from src.subagents import ALL_TOOLS, SUBAGENT_REGISTRY
 from src.tools import reset_project
 
-_model = create_chat_model(MODEL_NAME_DEFAULT).bind_tools(ALL_TOOLS)
+_model = create_chat_model(MODEL_NAME_DEFAULT, role="orchestrator").bind_tools(ALL_TOOLS)
 _system_prompt = load_persona(ORCHESTRATOR)
 
 
