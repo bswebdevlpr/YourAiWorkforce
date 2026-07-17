@@ -4,7 +4,7 @@ The engineering spine of this project: taming a stochastic, slow 8B local model 
 **reliable (clamp)** and **cheap (squeeze)** enough to use — plus the service around it. The problems
 below fall into those three buckets; each is backed by code and traces, and some have deeper
 write-ups in the blog series,
-[**LangGraph Multi-Agent series**](https://bswebdev.hashnode.dev/series/lang-graph).
+[**Agents on 16GB**](https://bswebdev.hashnode.dev/series/agents-on-16gb).
 
 - **Clamp — reliability:** #1 state isolation · #5 save-validation & post-processing · #6 dynamic tool binding · #7 model selection
 - **Squeeze — efficiency:** #4 deterministic done-check, measured
@@ -66,7 +66,7 @@ Since the model ignored "don't save on turn 1", I made the **save tool condition
 physically impossible to call. → [libs/subgraph.py](../src/libs/subgraph.py) (`model_with_save`)
 
 ## 7. Model-selection log
-A decision record of how `gemma4:e4b` (4B) failed at following Korean negative-instruction lists —
+A decision record of how `gemma3n:e4b` (4B) failed at following Korean negative-instruction lists —
 with LangSmith trace evidence — and the move to `qwen3:8b`. → [docs/plan/model-use.md](plan/model-use.md)
 
 ## 8. The Python stream never says *why* it ended

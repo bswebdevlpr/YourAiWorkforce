@@ -40,7 +40,7 @@
 
 ## 3. Planner model history & decision log
 
-### 2026.04 — tried `gemma4:e4b`
+### 2026.04 — tried `gemma3n:e4b`
 
 - **Why chosen**: MatFormer architecture runs an 8B-parameter model in ~4B (~3GB) of memory, 256K
   context, vision/audio multimodal.
