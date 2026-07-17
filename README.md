@@ -5,8 +5,8 @@
 > MacBook at **zero API cost**. A founder's rough idea → structured artifacts (PRD + architecture doc).
 
 One orchestrator routes work to specialist subagents. A human approves each step. Every model call
-runs on a local [Ollama](https://ollama.com) model (`qwen3:8b`, `deepseek-r1:8b`) — no API, no cost,
-nothing leaves the machine.
+runs on a local [Ollama](https://ollama.com) model — Phase 0 runs entirely on `qwen3:8b` (orchestrator,
+planner, and a temp=0 critic instance) — no API, no cost, nothing leaves the machine.
 
 It's built on [LangGraph](https://langchain-ai.github.io/langgraph/) `StateGraph`, and the whole
 design follows one rule I kept relearning the hard way: **prompt is suggestion, graph is law.**
@@ -35,14 +35,14 @@ from the opposite constraint:
 ## Architecture
 
 Two services. The Go gateway owns the **client-facing protocol**; the Python service owns the
-**graph**. The split is not cosmetic — see [hard problem #8](#8-the-python-stream-never-says-why-it-ended).
+**graph**. The split is not cosmetic — see [why the gateway exists](docs/engineering-notes.md#8-the-python-stream-never-says-why-it-ended).
 
 ```mermaid
 flowchart LR
     B["browser<br/>(SSE client)"]
     G["Go gateway :8080<br/>protocol · streaming · UI"]
     P["Python FastAPI :8000<br/>LangGraph orchestrator"]
-    O["Ollama<br/>qwen3:8b · deepseek-r1:8b"]
+    O["Ollama<br/>qwen3:8b (local)"]
 
     B -->|"POST /chat"| G
     G -->|"event: token / interrupt / done"| B
@@ -96,75 +96,21 @@ Key source: [src/agent.py](src/agent.py) (graph assembly),
 
 ---
 
-## Hard problems solved
+## Engineering highlights
 
-Each item is backed by code/traces; the design write-ups live in a separate blog series,
-[**LangGraph Multi-Agent series**](https://bswebdev.hashnode.dev/series/lang-graph).
+The harder problems this project actually turned on. Full write-ups, code, and traces →
+**[docs/engineering-notes.md](docs/engineering-notes.md)**.
 
-### 1. State isolation — two directions, one solved
-A subagent's state can leak two ways, and only one is worth fully closing. **Outbound** — the
-subagent's internal turns piling up in the parent thread — is solved: subagents run on a separate
-`SubagentState`, and a `finalize` step uses `RemoveMessage` to strip those internal turns, leaving
-the parent only a short summary. **Inbound** — the subagent's LLM still receiving the parent's
-messages — is left in on purpose, compensated by a structured briefing packet; closing it fully
-would have meant giving up LangGraph's native interrupt propagation (I tried, and resume broke).
-The original "planner introduces itself as the PM" symptom was fixed separately — model swap +
-persona hardening — not by isolation.
-→ [src/subagents/state.py](src/subagents/state.py) · [libs/subgraph.py:201](src/libs/subgraph.py#L201)
-
-### 2. Subgraph resume restarted from scratch every time
-The checkpointer wasn't passed down to the subgraph, so the user's reply vanished from `messages`
-and the conversation reset to turn 1. I injected the checkpointer consistently down to the subgraph
-and made FastAPI (async) and `langgraph dev` **share the same sqlite file**.
-→ [src/agent.py:170](src/agent.py#L170)
-
-### 3. `langgraph dev`'s sync-I/O block (blockbuster)
-The dev middleware blocks synchronous I/O inside handlers, so the SqliteSaver connection failed.
-I worked around it by opening the sqlite connection at **module load time** rather than inside
-`graph()`, keeping it off the event loop. → [src/agent.py:150](src/agent.py#L150)
-
-### 4. Making a stochastic 8B deterministic — isolating the done-check
-When the planner (temp=0.5, divergent) made the `check_done` YES/NO call, it misjudged. I injected
-a **separate temp=0 critic instance** (same model file) and stripped thinking tokens, making the
-completion check deterministic. I then instrumented it and pushed further: a labeled eval showed the
-critic's thinking mode was burning ~465 discarded tokens (~25s) per YES/NO, so I turned reasoning
-**off** and rewrote the prompt to bias toward *continue* on ambiguity (safe for HITL). Result —
-**parity with thinking on the dominant case distribution at ~48× lower latency**; prompt design beat
-inference-time compute. Backed by numbers, not adjectives.
-→ [product_discovery/__init__.py](src/subagents/planners/product_discovery/__init__.py) ·
-**[docs/metrics/](docs/metrics/) (harness + eval, reproducible)**
-
-### 5. Save-validation gate & response post-processing
-- `_validate_prd`: checks required sections exist and no placeholders remain, **blocking incomplete
-  artifacts from being saved**. → [product_discovery/tools.py:34](src/subagents/planners/product_discovery/tools.py#L34)
-- Response post-processing: strips `<think>` blocks, `🛑 [턴 종료]` markers, empty code fences, and
-  greeting prefixes after turn 2, all via regex. → [src/libs/subgraph.py](src/libs/subgraph.py)
-- `_sanitize_query`: normalizes the orchestrator's hallucinated honorifics (e.g. "대표님!") into a
-  noun phrase. → [src/agent.py:17](src/agent.py#L17)
-
-### 6. Hiding the save tool (dynamic tool binding)
-Since the model ignored "don't save on turn 1", I made the **save tool conditionally bound** so it's
-physically impossible to call. → [libs/subgraph.py](src/libs/subgraph.py) (`model_with_save`)
-
-### 7. Model-selection log
-A decision record of how `gemma4:e4b` (4B) failed at following Korean negative-instruction lists —
-with LangSmith trace evidence — and the move to `qwen3:8b`. → [docs/plan/model-use.md](docs/plan/model-use.md)
-
-### 8. The Python stream never says *why* it ended
-The FastAPI endpoint streams raw model tokens and then simply closes. A turn that reached `END` and
-a graph that **paused at an `interrupt()` waiting for human approval** are *byte-identical* on the
-wire — both are "tokens, then EOF". A chat client can't tell whether to re-open the input box or to
-render an approval prompt, and that distinction is the entire point of a HITL system.
-
-The information exists — LangGraph's `snapshot.next` is non-empty exactly when the graph is paused —
-it just never reaches the client. So the gateway **reconstructs it**: it relays the token stream,
-and the moment the stream hits EOF it makes a *second* call (`GET /state/{thread_id}`) to ask why,
-then emits an explicit `event: interrupt` or `event: done`.
-
-That's the load-bearing reason the gateway exists, and it fixes the service split in place:
-**Python owns the graph (tokens + state); Go owns the wire protocol the client actually consumes.**
-The browser's event handling collapses to a four-case `switch` with nothing left to infer.
-→ [gateway/main.go](gateway/main.go) (`realUpstream`, `fetchState`) · [src/main.py](src/main.py) (`GET /state/{thread_id}`)
+- **State isolation across a subgraph boundary** — strip a subagent's internal turns from the
+  parent thread with `RemoveMessage`, while keeping LangGraph's native interrupt propagation.
+- **A deterministic done-check, then measured** — a temp=0 critic with reasoning off and a
+  safety-biased prompt matches thinking-mode accuracy at ~48× lower latency; prompt design beat
+  inference-time compute ([numbers](docs/metrics/)).
+- **Reconstructing why the stream ended** — the Python token stream is byte-identical whether a
+  turn finished or paused for approval, so the Go gateway makes a second state call and emits
+  explicit `interrupt`/`done` events. The load-bearing reason the gateway exists.
+- **Making an illegal action impossible** — dynamic tool binding so the model physically *can't*
+  call `save` before it's allowed, instead of asking it not to.
 
 ---
 
@@ -173,7 +119,7 @@ The browser's event handling collapses to a four-case `switch` with nothing left
 | Layer | Tech |
 |-------|------|
 | Orchestration | LangGraph (`StateGraph`, subgraph-as-node, `interrupt`/`Command`) |
-| LLM runtime | Ollama (local) — `qwen3:8b` (orchestrator/planner), `deepseek-r1:8b` (critic candidate) |
+| LLM runtime | Ollama (local) — `qwen3:8b` for all Phase 0 roles (`deepseek-r1:8b` evaluated as critic, rejected — see [model log](docs/plan/model-use.md)) |
 | Serving | FastAPI (ASGI) + `langgraph dev` |
 | Gateway / BFF | Go (stdlib only — `net/http`, goroutines, `context`, `embed`) |
 | Client protocol | SSE — `token` / `interrupt` / `done` / `error` (designed at the gateway) |
@@ -186,9 +132,8 @@ The browser's event handling collapses to a four-case `switch` with nothing left
 ## Running it
 
 ```bash
-# 1. Pull local models (Ollama required)
+# 1. Pull the local model (Ollama required) — Phase 0 runs entirely on qwen3:8b
 ollama pull qwen3:8b
-ollama pull deepseek-r1:8b
 
 # 2. Environment variables
 cp .env.example .env    # fill in LANGSMITH_API_KEY, MODEL_BASE_URL, etc.

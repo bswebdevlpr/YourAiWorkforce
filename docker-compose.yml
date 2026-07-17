@@ -1,34 +1,22 @@
 services:
-  # 1. LangGraph 에이전트 앱
+  # LangGraph 에이전트 앱 (상태는 SqliteSaver 파일 — 별도 DB 불필요)
   agent-app:
     build: . # 현재 폴더의 Dockerfile을 읽어서 이미지를 만듦
     volumes:
       - ./src:/app/src # 코드 수정 시 바로 반영 (Hot Reload)
-      - .:/app # langgraph.json 파일을 읽기 위해 루트 전체 연결
+      - .:/app # langgraph.json + .checkpoints/ (sqlite 상태) 읽기 위해 루트 전체 연결
     ports:
       - "8123:8123"
       - "4173:4173" # LangSmith UI 포트 (추가)
     environment:
       - OLLAMA_BASE_URL=${MODEL_BASE_URL}
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - LANGCHAIN_TRACING_V2=false
       # - LANGCHAIN_ENDPOINT=http://langsmith:1984
       # - LANGSMITH_API_KEY=ls__local_v1 # 로컬용 더미 키
     # [중요] 컨테이너가 호스트의 Ollama를 찾을 수 있게만 통로를 열어줌
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on:
-      - db # DB가 먼저 준비된 다음에 앱이 켜지게 순서를 정해주는 안전장치
     deploy:
       resources:
         limits:
           memory: 2G
-  # 2. 에이전트 상태 저장용 DB
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
