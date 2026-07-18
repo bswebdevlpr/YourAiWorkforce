@@ -72,9 +72,22 @@ func main() {
 	}
 	mux.Handle("GET /", http.FileServerFS(sub))
 
+	// DEBUG_ROUTES가 설정됐을 때만 여는 진단 라우트.
+	// recover 미들웨어가 실제로 panic을 잡는지 눈으로 확인하는 용도.
+	if os.Getenv("DEBUG_ROUTES") != "" {
+		mux.HandleFunc("GET /debug/panic", func(w http.ResponseWriter, r *http.Request) {
+			panic("boom (intentional)")
+		})
+	}
+
+	// 미들웨어 배선. chain의 첫 인자가 가장 바깥이다:
+	// requestID(ID 부여) → logging(기록) → recover(사고 방지) → mux(진짜 라우팅)
+	// requestID를 맨 바깥에 둬서 logging/recover가 그 ID를 context에서 꺼내 쓸 수 있다.
+	handler := chain(mux, requestIDMiddleware, loggingMiddleware, recoverMiddleware)
+
 	addr := ":8080"
 	log.Printf("gateway listening on %s (upstream: %s)", addr, upstreamBase)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -91,7 +104,9 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad json", http.StatusBadRequest)
 		return
 	}
-	log.Printf("chat: thread=%q type=%q msg=%q", req.ThreadID, req.Type, req.Message)
+	// requestID 미들웨어가 context에 심어둔 ID를 여기서 꺼내 쓴다 — 값이 끝까지 흐른다는 증거.
+	reqID, _ := r.Context().Value(requestIDKey).(string)
+	log.Printf("[%s] chat: thread=%q type=%q msg=%q", reqID, req.ThreadID, req.Type, req.Message)
 
 	// (B) SSE 헤더. 이걸 안 붙이면 브라우저가 일반 응답으로 취급한다.
 	w.Header().Set("Content-Type", "text/event-stream")
