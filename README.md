@@ -173,7 +173,7 @@ generation) would produce an "ambitious but non-working demo".
 | Phase 0 — System Architect (PRD → architecture) | ✅ wired in code |
 | Orchestrator routing · HITL approval gate · state isolation | ✅ wired in code |
 | Phase 1–6 (build/QA/security/deploy agents) | 📐 persona designs only ([agents/](agents/)) · roadmap |
-| Go gateway — SSE relay of the `interrupt`/`resume` protocol | ✅ wired in code ([gateway/](gateway/)) |
+| Go gateway — SSE relay of the `interrupt`/`resume` protocol | ✅ wired in code ([gateway/](gateway/README.md)) |
 | Go gateway — thin streaming web UI | ✅ wired in code ([gateway/static/](gateway/static/)) |
 | Go gateway — session management · artifact-serving API | 🚧 planned |
 
